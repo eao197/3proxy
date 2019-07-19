@@ -859,6 +859,7 @@ int strongauth(struct clientparam * param){
 	return 5;
 }
 
+int radauth(struct clientparam * param);
 
 struct auth authfuncs[] = {
 	{authfuncs+1, NULL, NULL, ""},
@@ -867,7 +868,13 @@ struct auth authfuncs[] = {
 	{authfuncs+4, dnsauth, checkACL, "dnsname"},
 	{authfuncs+5, strongauth, checkACL, "strong"},
 	{authfuncs+6, cacheauth, checkACL, "cache"},
-	{authfuncs+7, NULL, NULL, "none"},
+#ifndef NORADIUS
+#define AUTHOFFSET 1
+	{authfuncs+7, radauth, checkACL, "radius"},
+#else
+#define AUTHOFFSET 0
+#endif
+	{authfuncs+7+AUTHOFFSET, NULL, NULL, "none"},
 
 	{NULL, NULL, NULL, ""}
 };

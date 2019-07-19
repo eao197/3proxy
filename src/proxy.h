@@ -131,6 +131,7 @@ void daemonize(void);
 
 #include "structures.h"
 
+#define MAXRADIUS 5
 
 extern RESOLVFUNC resolvfunc;
 
@@ -162,6 +163,8 @@ extern FILE * stdlog;
 void logstdout(struct clientparam * param, const unsigned char *s);
 void logsyslog(struct clientparam * param, const unsigned char *s);
 void lognone(struct clientparam * param, const unsigned char *s);
+void logradius(struct clientparam * param, const unsigned char *s);
+
 #ifndef NOSQL
 void logsql(struct clientparam * param, const unsigned char *s);
 int init_sql(char * s);
@@ -305,9 +308,24 @@ extern pthread_mutex_t hash_mutex;
 extern pthread_mutex_t tc_mutex;
 extern pthread_mutex_t pwl_mutex;
 extern pthread_mutex_t log_mutex;
+extern pthread_mutex_t rad_mutex;
 extern struct datatype datatypes[64];
 
 extern struct commands commandhandlers[];
+
+extern struct radserver {
+#ifdef NOIPV6
+	struct  sockaddr_in authaddr, logaddr;
+#else
+	struct  sockaddr_in6 authaddr, logaddr;
+#endif
+/*
+	SOCKET logsock;
+*/
+} radiuslist[MAXRADIUS];
+
+extern char radiussecret[64];
+extern int nradservers;
 
 #ifdef _WINCE
 char * CEToUnicode (const char *str);

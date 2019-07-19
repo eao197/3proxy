@@ -308,6 +308,11 @@ static int h_log(int argc, unsigned char ** argv){
 			conf.logfunc = logsql;
 		}
 #endif
+#ifndef NORADIUS
+		else if(!strcmp(argv[1],"radius")){
+			conf.logfunc = logradius;
+		}
+#endif
 		else {
 			FILE *fp;
 			if(argc > 2) {
@@ -1253,6 +1258,44 @@ static int h_delimchar(int argc, unsigned char **argv){
 	return 0;
 }
 
+#ifndef NORADIUS
+static int h_radius(int argc, unsigned char **argv){
+	unsigned short port;
+
+/*
+	int oldrad;
+#ifdef NOIPV6
+	struct  sockaddr_in bindaddr;
+#else
+	struct  sockaddr_in6 bindaddr;
+#endif
+
+	oldrad = nradservers;
+	nradservers = 0;
+	for(; oldrad; oldrad--){
+		if(radiuslist[oldrad].logsock >= 0) so._closesocket(radiuslist[oldrad].logsock);
+		radiuslist[oldrad].logsock = -1;
+	}
+*/
+	memset(radiuslist, 0, sizeof(radiuslist));
+	if(strlen(argv[1]) > 63) argv[1][63] = 0;
+	strcpy(radiussecret, argv[1]);
+	for( nradservers=0; nradservers < MAXRADIUS && nradservers < argc -2; nradservers++){
+		if( !getip46(46, argv[nradservers + 2], (struct sockaddr *)&radiuslist[nradservers].authaddr)) return 1;
+		if(!*SAPORT(&radiuslist[nradservers].authaddr))*SAPORT(&radiuslist[nradservers].authaddr) = htons(1812);
+		port = ntohs(*SAPORT(&radiuslist[nradservers].authaddr));
+		radiuslist[nradservers].logaddr = radiuslist[nradservers].authaddr;
+ 	        *SAPORT(&radiuslist[nradservers].logaddr) = htons(port+1);
+/*
+		bindaddr = conf.intsa;
+		if ((radiuslist[nradservers].logsock = so._socket(SASOCK(&radiuslist[nradservers].logaddr), SOCK_DGRAM, 0)) < 0) return 2;
+		if (so._bind(radiuslist[nradservers].logsock, (struct sockaddr *)&bindaddr, SASIZE(&bindaddr))) return 3;
+*/
+	}
+	return 0;
+}
+#endif
+
 static int h_authcache(int argc, unsigned char **argv){
 	conf.authcachetype = 0;
 	if(strstr((char *) *(argv + 1), "ip")) conf.authcachetype |= 1;
@@ -1414,6 +1457,9 @@ struct commands commandhandlers[]={
 	{commandhandlers+58, "stacksize", h_stacksize, 2, 2},
 	{commandhandlers+59, "force", h_force, 1, 1},
 	{commandhandlers+60, "noforce", h_noforce, 1, 1},
+#ifndef NORADIUS
+	{commandhandlers+61, "radius", h_radius, 3, 0},
+#endif
 	{specificcommands, 	 "", h_noop, 1, 0}
 };
 
