@@ -722,13 +722,9 @@ int cacheauth(struct clientparam * param){
 			
 		}
 		if(((!(conf.authcachetype&2)) || (param->username && ac->username && !strcmp(ac->username, (char *)param->username))) &&
-// Usage of param->sincr.
-#if 0
 		   ((!(conf.authcachetype&1)) || (*SAFAMILY(&ac->sa) ==  *SAFAMILY(&param->sincr) && !memcmp(SAADDR(&ac->sa), SAADDR(&param->sincr), SAADDRLEN(&ac->sa)))) && 
-			// Check port.
-		   ((!(conf.authcachetype&8)) || (*SAFAMILY(&ac->sa) == *SAFAMILY(&param->sincr) && SAPORT(&ac->sa) == SAPORT(&param->sincr))) && 
-#endif
 // ***
+			// Check port of proxy service instead of client!
 			(!(conf.authcachetype&8) || (*SAFAMILY(&ac->sa) == *SAFAMILY(&param->sincr) && (*SAPORT(&ac->sa) == *SAPORT(&param->srv->intsa)))) && 
 // ***
 		   (!(conf.authcachetype&4) || (ac->password && param->password && !strcmp(ac->password, (char *)param->password)))) {
@@ -769,14 +765,9 @@ int doauth(struct clientparam * param){
 				pthread_mutex_lock(&hash_mutex);
 				for(ac = authc; ac; ac = ac->next){
 					if((!(conf.authcachetype&2) || !strcmp(ac->username, (char *)param->username)) &&
-// Usage of sincr
-#if 0
 					   (!(conf.authcachetype&1) || (*SAFAMILY(&ac->sa) ==  *SAFAMILY(&param->sincr) && !memcmp(SAADDR(&ac->sa), SAADDR(&param->sincr), SAADDRLEN(&ac->sa))))  &&
-						// Check port.
-						(!(conf.authcachetype&8) || (*SAFAMILY(&ac->sa) == *SAFAMILY(&param->sincr) && SAPORT(&ac->sa) == SAPORT(&param->sincr))) && 
-#endif
 // ***
-						// Check port.
+						// Check port of proxy service instead of client!
 						(!(conf.authcachetype&8) || (*SAFAMILY(&ac->sa) == *SAFAMILY(&param->sincr) && (*SAPORT(&ac->sa) == *SAPORT(&param->srv->intsa)))) && 
 // ***
 					   (!(conf.authcachetype&4) || (ac->password && !strcmp(ac->password, (char *)param->password)))) {
@@ -793,6 +784,7 @@ int doauth(struct clientparam * param){
 							myfree(tmp);
 						}
 						ac->sa = param->sincr;
+						// Store port of service instead of the client!
 						if((conf.authcachetype&8)) {
 							*SAPORT(&ac->sa) = *SAPORT(&param->srv->intsa);
 						}
@@ -806,6 +798,7 @@ int doauth(struct clientparam * param){
 						ac->expires = conf.time + conf.authcachetime;
 						ac->username = param->username?mystrdup((char *)param->username):NULL;
 						ac->sa = param->sincr;
+						// Store port of service instead of the client!
 						if((conf.authcachetype&8)) {
 							*SAPORT(&ac->sa) = *SAPORT(&param->srv->intsa);
 						}
