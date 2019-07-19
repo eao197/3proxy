@@ -723,6 +723,8 @@ int cacheauth(struct clientparam * param){
 		}
 		if(((!(conf.authcachetype&2)) || (param->username && ac->username && !strcmp(ac->username, (char *)param->username))) &&
 		   ((!(conf.authcachetype&1)) || (*SAFAMILY(&ac->sa) ==  *SAFAMILY(&param->sincr) && !memcmp(SAADDR(&ac->sa), SAADDR(&param->sincr), SAADDRLEN(&ac->sa)))) && 
+			// Check port.
+		   ((!(conf.authcachetype&8)) || (*SAFAMILY(&ac->sa) == *SAFAMILY(&param->sincr) && SAPORT(&ac->sa) == SAPORT(&param->sincr))) && 
 		   (!(conf.authcachetype&4) || (ac->password && param->password && !strcmp(ac->password, (char *)param->password)))) {
 			if(param->username){
 				myfree(param->username);
@@ -757,6 +759,8 @@ int doauth(struct clientparam * param){
 				for(ac = authc; ac; ac = ac->next){
 					if((!(conf.authcachetype&2) || !strcmp(ac->username, (char *)param->username)) &&
 					   (!(conf.authcachetype&1) || (*SAFAMILY(&ac->sa) ==  *SAFAMILY(&param->sincr) && !memcmp(SAADDR(&ac->sa), SAADDR(&param->sincr), SAADDRLEN(&ac->sa))))  &&
+						// Check port.
+						(!(conf.authcachetype&8) || (*SAFAMILY(&ac->sa) == *SAFAMILY(&param->sincr) && SAPORT(&ac->sa) == SAPORT(&param->sincr))) && 
 					   (!(conf.authcachetype&4) || (ac->password && !strcmp(ac->password, (char *)param->password)))) {
 						ac->expires = conf.time + conf.authcachetime;
 						if(strcmp(ac->username, (char *)param->username)){
