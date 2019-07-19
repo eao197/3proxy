@@ -732,6 +732,7 @@ int cacheauth(struct clientparam * param){
 			(!(conf.authcachetype&8) || (*SAFAMILY(&ac->sa) == *SAFAMILY(&param->sincr) && (*SAPORT(&ac->sa) == *SAPORT(&param->srv->intsa)))) && 
 // ***
 		   (!(conf.authcachetype&4) || (ac->password && param->password && !strcmp(ac->password, (char *)param->password)))) {
+(*param->srv->logfunc)(param, "*cacheauth (1)*");
 			if(param->username){
 				myfree(param->username);
 			}
@@ -756,10 +757,14 @@ int doauth(struct clientparam * param){
 
 	for(authfuncs=param->srv->authfuncs; authfuncs; authfuncs=authfuncs->next){
 		res = authfuncs->authenticate?(*authfuncs->authenticate)(param):0;
+(*param->srv->logfunc)(param, (res? "(1) res!=0" : "(1) res==0"));
 		if(!res) {
 			if(authfuncs->authorize &&
 				(res = (*authfuncs->authorize)(param)))
+{
+(*param->srv->logfunc)(param, (res? "(2) res!=0" : "(2) res==0"));
 					return res;
+}
 			if(conf.authcachetype && authfuncs->authenticate && authfuncs->authenticate != cacheauth && param->username && (!(conf.authcachetype&4) || (!param->pwtype && param->password))){
 				pthread_mutex_lock(&hash_mutex);
 				for(ac = authc; ac; ac = ac->next){
@@ -775,6 +780,7 @@ int doauth(struct clientparam * param){
 						(!(conf.authcachetype&8) || (*SAFAMILY(&ac->sa) == *SAFAMILY(&param->sincr) && (*SAPORT(&ac->sa) == *SAPORT(&param->srv->intsa)))) && 
 // ***
 					   (!(conf.authcachetype&4) || (ac->password && !strcmp(ac->password, (char *)param->password)))) {
+(*param->srv->logfunc)(param, "(3) update in cache");
 						ac->expires = conf.time + conf.authcachetime;
 						if(strcmp(ac->username, (char *)param->username)){
 							tmp = ac->username;
@@ -794,11 +800,15 @@ int doauth(struct clientparam * param){
 					}
 				}
 				if(!ac){
+(*param->srv->logfunc)(param, "(4) add to cache");
 					ac = myalloc(sizeof(struct authcache));
 					if(ac){
 						ac->expires = conf.time + conf.authcachetime;
 						ac->username = param->username?mystrdup((char *)param->username):NULL;
 						ac->sa = param->sincr;
+						if((conf.authcachetype&8)) {
+							*SAPORT(&ac->sa) = *SAPORT(&param->srv->intsa);
+						}
 						ac->password = NULL;
 						if((conf.authcachetype&4) && param->password) ac->password = mystrdup((char *)param->password);
 					}
