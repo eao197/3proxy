@@ -739,7 +739,6 @@ int cacheauth(struct clientparam * param){
 			&& (!(conf.authcachetype & AUTHCACHE_PASSWORD)
 				|| (ac->password && param->password
 				&& !strcmp(ac->password, (char *)param->password)))) {
-(*param->srv->logfunc)(param, "*cacheauth (1)*");
 			if(param->username){
 				myfree(param->username);
 			}
@@ -764,14 +763,11 @@ int doauth(struct clientparam * param){
 
 	for(authfuncs=param->srv->authfuncs; authfuncs; authfuncs=authfuncs->next){
 		res = authfuncs->authenticate?(*authfuncs->authenticate)(param):0;
-(*param->srv->logfunc)(param, (res? "(1) res!=0" : "(1) res==0"));
 		if(!res) {
 			if(authfuncs->authorize &&
 				(res = (*authfuncs->authorize)(param)))
-{
-(*param->srv->logfunc)(param, (res? "(2) res!=0" : "(2) res==0"));
 					return res;
-}
+
 			if(conf.authcachetype && authfuncs->authenticate && authfuncs->authenticate != cacheauth && param->username && (!(conf.authcachetype & AUTHCACHE_PASSWORD) || (!param->pwtype && param->password))){
 				pthread_mutex_lock(&hash_mutex);
 				for(ac = authc; ac; ac = ac->next){
@@ -790,7 +786,6 @@ int doauth(struct clientparam * param){
 						&& (!(conf.authcachetype & AUTHCACHE_PASSWORD)
 							|| (ac->password
 								&&!strcmp(ac->password, (char *)param->password)))) {
-(*param->srv->logfunc)(param, "(3) update in cache");
 						ac->expires = conf.time + conf.authcachetime;
 						if(strcmp(ac->username, (char *)param->username)){
 							tmp = ac->username;
@@ -811,7 +806,6 @@ int doauth(struct clientparam * param){
 					}
 				}
 				if(!ac){
-(*param->srv->logfunc)(param, "(4) add to cache");
 					ac = myalloc(sizeof(struct authcache));
 					if(ac){
 						ac->expires = conf.time + conf.authcachetime;
