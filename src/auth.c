@@ -697,6 +697,8 @@ struct authcache {
 #else
 	struct sockaddr_in sa;
 #endif
+	// NOTE: will be used only if srvport is specified in authcache options.
+	in_port_t srvport;
 	struct authcache *next;
 } *authc = NULL;
 
@@ -732,7 +734,7 @@ int cacheauth(struct clientparam * param){
 			// Check port of proxy service instead of client!
 			&& (!(conf.authcachetype & AUTHCACHE_SRVPORT)
 				|| (*SAFAMILY(&ac->sa) == *SAFAMILY(&param->sincr)
-				&& (*SAPORT(&ac->sa) == *SAPORT(&param->srv->intsa))))
+				&& (ac->srvport == *SAPORT(&param->srv->intsa))))
 // ***
 			&& (!(conf.authcachetype & AUTHCACHE_PASSWORD)
 				|| (ac->password && param->password
@@ -783,7 +785,7 @@ int doauth(struct clientparam * param){
 						// Check port of proxy service instead of client!
 						&& (!(conf.authcachetype & AUTHCACHE_SRVPORT)
 							|| (*SAFAMILY(&ac->sa) == *SAFAMILY(&param->sincr)
-								&& (*SAPORT(&ac->sa) == *SAPORT(&param->srv->intsa))))
+								&& (ac->srvport == *SAPORT(&param->srv->intsa))))
 // ***
 						&& (!(conf.authcachetype & AUTHCACHE_PASSWORD)
 							|| (ac->password
@@ -801,9 +803,9 @@ int doauth(struct clientparam * param){
 							myfree(tmp);
 						}
 						ac->sa = param->sincr;
-						// Store port of service instead of the client!
+						// Store port of service instead if required.
 						if((conf.authcachetype & AUTHCACHE_SRVPORT)) {
-							*SAPORT(&ac->sa) = *SAPORT(&param->srv->intsa);
+							ac->srvport = *SAPORT(&param->srv->intsa);
 						}
 						break;
 					}
@@ -815,10 +817,14 @@ int doauth(struct clientparam * param){
 						ac->expires = conf.time + conf.authcachetime;
 						ac->username = param->username?mystrdup((char *)param->username):NULL;
 						ac->sa = param->sincr;
+
 						// Store port of service instead of the client!
 						if((conf.authcachetype & AUTHCACHE_SRVPORT)) {
-							*SAPORT(&ac->sa) = *SAPORT(&param->srv->intsa);
+							ac->srvport = *SAPORT(&param->srv->intsa);
 						}
+						else
+							ac->srvport = 0;
+
 						ac->password = NULL;
 						if((conf.authcachetype & AUTHCACHE_PASSWORD) && param->password) {
 							ac->password = mystrdup((char *)param->password);
