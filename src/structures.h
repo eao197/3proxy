@@ -557,6 +557,12 @@ struct filemon {
 	struct filemon *next;
 };
 
+typedef enum {
+	AUTHCACHE_IP = 1,
+	AUTHCACHE_USERNAME = 2,
+	AUTHCACHE_PASSWORD = 4,
+	AUTHCACHE_SRVPORT = 8
+} AUTHCACHE_ITEMS;
 
 struct extparam {
 	int timeouts[12];

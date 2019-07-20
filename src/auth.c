@@ -721,13 +721,22 @@ int cacheauth(struct clientparam * param){
 			continue;
 			
 		}
-		if(((!(conf.authcachetype&2)) || (param->username && ac->username && !strcmp(ac->username, (char *)param->username))) &&
-		   ((!(conf.authcachetype&1)) || (*SAFAMILY(&ac->sa) ==  *SAFAMILY(&param->sincr) && !memcmp(SAADDR(&ac->sa), SAADDR(&param->sincr), SAADDRLEN(&ac->sa)))) && 
+		if(((!(conf.authcachetype & AUTHCACHE_USERNAME))
+				|| (param->username && ac->username
+				&& !strcmp(ac->username, (char *)param->username)))
+			&& ((!(conf.authcachetype & AUTHCACHE_IP))
+				|| (*SAFAMILY(&ac->sa) ==  *SAFAMILY(&param->sincr)
+				&& !memcmp(SAADDR(&ac->sa),
+					SAADDR(&param->sincr), SAADDRLEN(&ac->sa))))
 // ***
 			// Check port of proxy service instead of client!
-			(!(conf.authcachetype&8) || (*SAFAMILY(&ac->sa) == *SAFAMILY(&param->sincr) && (*SAPORT(&ac->sa) == *SAPORT(&param->srv->intsa)))) && 
+			&& (!(conf.authcachetype & AUTHCACHE_SRVPORT)
+				|| (*SAFAMILY(&ac->sa) == *SAFAMILY(&param->sincr)
+				&& (*SAPORT(&ac->sa) == *SAPORT(&param->srv->intsa))))
 // ***
-		   (!(conf.authcachetype&4) || (ac->password && param->password && !strcmp(ac->password, (char *)param->password)))) {
+			&& (!(conf.authcachetype & AUTHCACHE_PASSWORD)
+				|| (ac->password && param->password
+				&& !strcmp(ac->password, (char *)param->password)))) {
 (*param->srv->logfunc)(param, "*cacheauth (1)*");
 			if(param->username){
 				myfree(param->username);
@@ -761,16 +770,24 @@ int doauth(struct clientparam * param){
 (*param->srv->logfunc)(param, (res? "(2) res!=0" : "(2) res==0"));
 					return res;
 }
-			if(conf.authcachetype && authfuncs->authenticate && authfuncs->authenticate != cacheauth && param->username && (!(conf.authcachetype&4) || (!param->pwtype && param->password))){
+			if(conf.authcachetype && authfuncs->authenticate && authfuncs->authenticate != cacheauth && param->username && (!(conf.authcachetype & AUTHCACHE_PASSWORD) || (!param->pwtype && param->password))){
 				pthread_mutex_lock(&hash_mutex);
 				for(ac = authc; ac; ac = ac->next){
-					if((!(conf.authcachetype&2) || !strcmp(ac->username, (char *)param->username)) &&
-					   (!(conf.authcachetype&1) || (*SAFAMILY(&ac->sa) ==  *SAFAMILY(&param->sincr) && !memcmp(SAADDR(&ac->sa), SAADDR(&param->sincr), SAADDRLEN(&ac->sa))))  &&
+					if((!(conf.authcachetype & AUTHCACHE_USERNAME)
+							|| !strcmp(ac->username, (char *)param->username))
+						&& (!(conf.authcachetype & AUTHCACHE_IP)
+						 	|| (*SAFAMILY(&ac->sa) ==  *SAFAMILY(&param->sincr)
+								&& !memcmp(SAADDR(&ac->sa),
+										SAADDR(&param->sincr), SAADDRLEN(&ac->sa))))
 // ***
 						// Check port of proxy service instead of client!
-						(!(conf.authcachetype&8) || (*SAFAMILY(&ac->sa) == *SAFAMILY(&param->sincr) && (*SAPORT(&ac->sa) == *SAPORT(&param->srv->intsa)))) && 
+						&& (!(conf.authcachetype & AUTHCACHE_SRVPORT)
+							|| (*SAFAMILY(&ac->sa) == *SAFAMILY(&param->sincr)
+								&& (*SAPORT(&ac->sa) == *SAPORT(&param->srv->intsa))))
 // ***
-					   (!(conf.authcachetype&4) || (ac->password && !strcmp(ac->password, (char *)param->password)))) {
+						&& (!(conf.authcachetype & AUTHCACHE_PASSWORD)
+							|| (ac->password
+								&&!strcmp(ac->password, (char *)param->password)))) {
 (*param->srv->logfunc)(param, "(3) update in cache");
 						ac->expires = conf.time + conf.authcachetime;
 						if(strcmp(ac->username, (char *)param->username)){
@@ -778,14 +795,14 @@ int doauth(struct clientparam * param){
 							ac->username = mystrdup((char *)param->username);
 							myfree(tmp);
 						}
-						if((conf.authcachetype&4)){
+						if((conf.authcachetype & AUTHCACHE_PASSWORD)){
 							tmp = ac->password;
 							ac->password = mystrdup((char *)param->password);
 							myfree(tmp);
 						}
 						ac->sa = param->sincr;
 						// Store port of service instead of the client!
-						if((conf.authcachetype&8)) {
+						if((conf.authcachetype & AUTHCACHE_SRVPORT)) {
 							*SAPORT(&ac->sa) = *SAPORT(&param->srv->intsa);
 						}
 						break;
@@ -799,11 +816,13 @@ int doauth(struct clientparam * param){
 						ac->username = param->username?mystrdup((char *)param->username):NULL;
 						ac->sa = param->sincr;
 						// Store port of service instead of the client!
-						if((conf.authcachetype&8)) {
+						if((conf.authcachetype & AUTHCACHE_SRVPORT)) {
 							*SAPORT(&ac->sa) = *SAPORT(&param->srv->intsa);
 						}
 						ac->password = NULL;
-						if((conf.authcachetype&4) && param->password) ac->password = mystrdup((char *)param->password);
+						if((conf.authcachetype & AUTHCACHE_PASSWORD) && param->password) {
+							ac->password = mystrdup((char *)param->password);
+						}
 					}
 					ac->next = authc;
 					authc = ac;

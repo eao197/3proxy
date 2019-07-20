@@ -1336,12 +1336,12 @@ static int h_radius(int argc, unsigned char **argv){
 
 static int h_authcache(int argc, unsigned char **argv){
 	conf.authcachetype = 0;
-	if(strstr((char *) *(argv + 1), "ip")) conf.authcachetype |= 1;
-	if(strstr((char *) *(argv + 1), "user")) conf.authcachetype |= 2;
-	if(strstr((char *) *(argv + 1), "pass")) conf.authcachetype |= 4;
-	if(strstr((char *) *(argv + 1), "port")) conf.authcachetype |= 8;
+	if(strstr((char *) *(argv + 1), "ip")) conf.authcachetype |= AUTHCACHE_IP;
+	if(strstr((char *) *(argv + 1), "user")) conf.authcachetype |= AUTHCACHE_USERNAME;
+	if(strstr((char *) *(argv + 1), "pass")) conf.authcachetype |= AUTHCACHE_PASSWORD;
+	if(strstr((char *) *(argv + 1), "srvport")) conf.authcachetype |= AUTHCACHE_SRVPORT;
 	if(argc > 2) conf.authcachetime = (unsigned) atoi((char *) *(argv + 2));
-	if(!conf.authcachetype) conf.authcachetype = 6;
+	if(!conf.authcachetype) conf.authcachetype = AUTHCACHE_USERNAME & AUTHCACHE_PASSWORD;
 	if(!conf.authcachetime) conf.authcachetime = 600;
 	return 0;
 }
