@@ -1476,6 +1476,10 @@ static int h_chroot(int argc, unsigned char **argv){
 }
 #endif
 
+static int h_client_bandlimin(int argc, unsigned char **argv){
+	conf.client_bandlimin_rate = atoi((char *)argv[1]);
+	return 0;
+}
 
 struct commands specificcommands[]={
 #ifndef _WIN32
@@ -1547,8 +1551,9 @@ struct commands commandhandlers[]={
 	{commandhandlers+58, "stacksize", h_stacksize, 2, 2},
 	{commandhandlers+59, "force", h_force, 1, 1},
 	{commandhandlers+60, "noforce", h_noforce, 1, 1},
+	{commandhandlers+61, "client_bandlimin", h_client_bandlimin, 2, 2},
 #ifndef NORADIUS
-	{commandhandlers+61, "radius", h_radius, 3, 0},
+	{commandhandlers+62, "radius", h_radius, 3, 0},
 #endif
 	{specificcommands, 	 "", h_noop, 1, 0}
 };

@@ -50,7 +50,7 @@ printf("*** client_bandlim_attach: %p\n", username);
 					"a new client_bandlim item\n");
 			goto unlock_then_exit;
 		}
-		cur->username = myalloc(strlen(username)+1);
+		cur->username = mystrdup(username);
 		if(!cur->username) {
 			fprintf(stderr, "client_bandlim_attach: no memory for "
 					"copy of username\n");
@@ -59,7 +59,6 @@ printf("*** client_bandlim_attach: %p\n", username);
 		}
 		cur->prev = last;
 		cur->next = NULL;
-		strcpy(cur->username, username);
 		memset(&cur->limit, 0, sizeof(cur->limit));
 		cur->limit.rate = rate;
 		cur->usage_count = 1u;
@@ -738,6 +737,22 @@ void trafcountfunc(struct clientparam *param){
 	pthread_mutex_unlock(&tc_mutex);
 }
 
+static int try_set_client_bandlimin_if_needed(struct clientparam * param) {
+	int result = 0;
+
+	if(0u != conf.client_bandlimin_rate) {
+		if(!param->personal_bandlimin) {
+			param->personal_bandlimin = client_bandlim_attach(param->username, 10000);
+			if(!param->personal_bandlimin) {
+				fprintf(stderr, "alwaysauth: client_bandlim_attach failed\n");
+				result = 10001;
+			}
+		}
+	}
+
+	return result;
+}
+
 int alwaysauth(struct clientparam * param){
 	int res;
 	struct trafcount * tc;
@@ -751,14 +766,10 @@ printf("*** alwaysauth: before doconnect\n");
 printf("*** alwaysauth: after doconnect, res=%d\n", res);
 	if(!res){
 
-//FIXME: just a check!
-if(!param->personal_bandlimin) {
-	param->personal_bandlimin = client_bandlim_attach(param->username, 10000);
-	if(!param->personal_bandlimin) {
-		fprintf(stderr, "alwaysauth: client_bandlim_attach failed\n");
-		return 10001;
-	}
-}
+		// Client's bandlimin must be taken into an account.
+		if(0 != (res = try_set_client_bandlimin_if_needed(param))) {
+			return res;
+		}
 
 		initbandlims(param);
 		for(tc = conf.trafcounter; tc; tc = tc->next) {

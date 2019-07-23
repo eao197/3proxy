@@ -615,6 +615,10 @@ struct extparam {
 	time_t logtime, time;
 	unsigned logdumpsrv, logdumpcli;
 	char delimchar;
+
+	// Band-limit for incomming traffic of a client.
+	// Value 0 means that this limit is not used.
+	unsigned client_bandlimin_rate;
 };
 
 struct property {
