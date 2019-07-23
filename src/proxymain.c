@@ -1006,12 +1006,12 @@ void freeparam(struct clientparam * param) {
 		so._closesocket(param->clisock);
 	}
 
-	// Personal bandlim for incoming traffic is no more needed.
+	// Personal bandlim for incoming and outgoing traffic is no more needed.
 	client_bandlim_detach(param->personal_bandlimin);
+	client_bandlim_detach(param->personal_bandlimout);
 
 	myfree(param);
 }
-
 
 #ifndef STDMAIN
 static void * itcopy (void * from, size_t size){

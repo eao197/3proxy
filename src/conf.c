@@ -1481,6 +1481,11 @@ static int h_client_bandlimin(int argc, unsigned char **argv){
 	return 0;
 }
 
+static int h_client_bandlimout(int argc, unsigned char **argv){
+	conf.client_bandlimout_rate = atoi((char *)argv[1]);
+	return 0;
+}
+
 struct commands specificcommands[]={
 #ifndef _WIN32
 	{specificcommands+1, "setuid", h_setuid, 2, 2},
@@ -1552,8 +1557,9 @@ struct commands commandhandlers[]={
 	{commandhandlers+59, "force", h_force, 1, 1},
 	{commandhandlers+60, "noforce", h_noforce, 1, 1},
 	{commandhandlers+61, "client_bandlimin", h_client_bandlimin, 2, 2},
+	{commandhandlers+62, "client_bandlimout", h_client_bandlimout, 2, 2},
 #ifndef NORADIUS
-	{commandhandlers+62, "radius", h_radius, 3, 0},
+	{commandhandlers+63, "radius", h_radius, 3, 0},
 #endif
 	{specificcommands, 	 "", h_noop, 1, 0}
 };

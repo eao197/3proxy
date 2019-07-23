@@ -328,10 +328,16 @@ struct bandlim {
 	unsigned rate;
 };
 
+typedef enum {
+	CLIENT_BANDLIM_IN=1,
+	CLIENT_BANDLIM_OUT=2
+} CLIENT_BANDLIM_DIR;
+
 //FIXME: document this!
 struct client_bandlim {
 	struct client_bandlim * next;
 	struct client_bandlim * prev;
+	CLIENT_BANDLIM_DIR direction;
 	char * username;
 	struct bandlim limit;
 	unsigned usage_count;
@@ -559,7 +565,10 @@ struct clientparam {
 
 	time_t time_start;
 
+	// Optional band-limit for incoming traffic.
 	struct client_bandlim * personal_bandlimin;
+	// Optional band-limit for outgoing traffic.
+	struct client_bandlim * personal_bandlimout;
 };
 
 struct filemon {
@@ -619,6 +628,9 @@ struct extparam {
 	// Band-limit for incomming traffic of a client.
 	// Value 0 means that this limit is not used.
 	unsigned client_bandlimin_rate;
+	// Band-limit for outgoing traffic of a client.
+	// Value 0 means that this limit is not used.
+	unsigned client_bandlimout_rate;
 };
 
 struct property {

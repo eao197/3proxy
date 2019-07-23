@@ -11,14 +11,18 @@
 //
 // Tools for working with client_bandlim.
 //
+
+// Head for list of client_bandlim items.
+// NOTE: holds items for incoming and outgoing traffic.
 static struct client_bandlim client_bandlim_head = {
-	NULL, NULL, NULL,
+	NULL, NULL, 0 /*Direction: 0 is invalid value*/, NULL,
 	{ NULL, NULL, 0, 0, 0 },
 	0
 };
 
 struct client_bandlim * client_bandlim_attach(
 		const struct clientparam * client,
+		CLIENT_BANDLIM_DIR direction,
 		unsigned rate) {
 	// For the case if username is NULL.
 	char string_ip[INET6_ADDRSTRLEN];
@@ -42,7 +46,9 @@ struct client_bandlim * client_bandlim_attach(
 
 	struct client_bandlim * cur = client_bandlim_head.next;
 	struct client_bandlim * last = &client_bandlim_head;
-	while(cur && 0 != strcmp(cur->username, username)) {
+	while(cur &&
+			!(direction == cur->direction
+			&& 0 == strcmp(cur->username, username))) {
 		last = cur;
 		cur = cur->next;
 	}
@@ -68,6 +74,7 @@ struct client_bandlim * client_bandlim_attach(
 		}
 		cur->prev = last;
 		cur->next = NULL;
+		cur->direction = direction;
 		memset(&cur->limit, 0, sizeof(cur->limit));
 		cur->limit.rate = rate;
 		cur->usage_count = 1u;
@@ -76,6 +83,7 @@ struct client_bandlim * client_bandlim_attach(
 	}
 
 	result = cur;
+printf("*** client_bandlim_attach: user=%s, dir=%d\n", result->username, result->direction); 
 
 unlock_then_exit:
 	pthread_mutex_unlock(&bandlim_mutex);
@@ -94,6 +102,7 @@ void client_bandlim_detach(struct client_bandlim * what) {
 			if(what->next)
 				what->next->prev = what->prev;
 
+printf("*** client_bandlim_detach: user=%s, dir=%d\n", what->username, what->direction); 
 			myfree(what->username);
 			myfree(what);
 		}
@@ -729,10 +738,24 @@ static int try_set_client_bandlimin_if_needed(struct clientparam * param) {
 
 	if(0u != conf.client_bandlimin_rate) {
 		if(!param->personal_bandlimin) {
-			param->personal_bandlimin = client_bandlim_attach(param, conf.client_bandlimin_rate);
+			param->personal_bandlimin = client_bandlim_attach(
+					param, CLIENT_BANDLIM_IN, conf.client_bandlimin_rate);
 			if(!param->personal_bandlimin) {
-				fprintf(stderr, "alwaysauth: client_bandlim_attach failed\n");
+				fprintf(stderr, "alwaysauth: client_bandlim_attach("
+						"CLIENT_BANDLIM_IN) failed\n");
 				result = 10001;
+			}
+		}
+	}
+
+	if(!result && 0u != conf.client_bandlimout_rate) {
+		if(!param->personal_bandlimout) {
+			param->personal_bandlimout = client_bandlim_attach(
+					param, CLIENT_BANDLIM_OUT, conf.client_bandlimout_rate);
+			if(!param->personal_bandlimout) {
+				fprintf(stderr, "alwaysauth: client_bandlim_attach("
+						"CLIENT_BANDLIM_OUT) failed\n");
+				result = 10002;
 			}
 		}
 	}
