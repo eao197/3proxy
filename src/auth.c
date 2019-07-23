@@ -18,12 +18,23 @@ static struct client_bandlim client_bandlim_head = {
 };
 
 struct client_bandlim * client_bandlim_attach(
-		const char * username,
+		const struct clientparam * client,
 		unsigned rate) {
+	// For the case if username is NULL.
+	char string_ip[INET6_ADDRSTRLEN];
+	const char * username = client->username;
 	struct client_bandlim * result = NULL;
+
 	if(!username) {
-		fprintf(stderr, "client_bandlim_attach: NULL as username\n");
-		goto end;
+		// An IP address should be used instead of a client name.
+		username = inet_ntop(*SAFAMILY(&client->sincr),
+				SAADDR(&client->sincr),
+				string_ip, INET6_ADDRSTRLEN);
+		if(!username) {
+			fprintf(stderr, "client_bandlim_attach: unable to convert "
+					"IP to string, errno: %d\n", errno);
+			goto end;
+		}
 	}
 
 	// Try to find already existing item in the list.
@@ -718,7 +729,7 @@ static int try_set_client_bandlimin_if_needed(struct clientparam * param) {
 
 	if(0u != conf.client_bandlimin_rate) {
 		if(!param->personal_bandlimin) {
-			param->personal_bandlimin = client_bandlim_attach(param->username, 10000);
+			param->personal_bandlimin = client_bandlim_attach(param, 10000);
 			if(!param->personal_bandlimin) {
 				fprintf(stderr, "alwaysauth: client_bandlim_attach failed\n");
 				result = 10001;

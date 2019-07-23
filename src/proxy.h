@@ -361,7 +361,7 @@ extern char * ceargv[32];
 
 //FIXME: document this!
 struct client_bandlim * client_bandlim_attach(
-	const char * username,
+	const struct clientparam * client,
 	unsigned rate);
 //NOTE: null-pointer can safely be passed here!
 void client_bandlim_detach(struct client_bandlim * what);
