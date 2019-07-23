@@ -8,6 +8,95 @@
 
 #include "proxy.h"
 
+//
+// Tools for working with client_bandlim.
+//
+static struct client_bandlim client_bandlim_head = {
+	NULL, NULL, NULL,
+	{ NULL, NULL, 0, 0, 0 },
+	0
+};
+
+struct client_bandlim * client_bandlim_attach(
+		const char * username,
+		unsigned rate) {
+//FIXME: log!
+printf("*** client_bandlim_attach: %p\n", username);
+	struct client_bandlim * result = NULL;
+	if(!username) {
+		fprintf(stderr, "client_bandlim_attach: NULL as username\n");
+		goto end;
+	}
+
+	// Try to find already existing item in the list.
+	pthread_mutex_lock(&bandlim_mutex);
+
+	struct client_bandlim * cur = client_bandlim_head.next;
+	struct client_bandlim * last = &client_bandlim_head;
+	while(cur && 0 != strcmp(cur->username, username)) {
+		last = cur;
+		cur = cur->next;
+	}
+
+	if(cur) {
+		// Existing item found. Usage counter should be incremented only.
+		cur->usage_count += 1u;
+	}
+	else {
+		// A new item should be created!
+		cur = myalloc(sizeof(struct client_bandlim));
+		if(!cur) {
+			fprintf(stderr, "client_bandlim_attach: no memory for "
+					"a new client_bandlim item\n");
+			goto unlock_then_exit;
+		}
+		cur->username = myalloc(strlen(username)+1);
+		if(!cur->username) {
+			fprintf(stderr, "client_bandlim_attach: no memory for "
+					"copy of username\n");
+			myfree(cur);
+			goto unlock_then_exit;
+		}
+		cur->prev = last;
+		cur->next = NULL;
+		strcpy(cur->username, username);
+		memset(&cur->limit, 0, sizeof(cur->limit));
+		cur->limit.rate = rate;
+		cur->usage_count = 1u;
+
+		last->next = cur;
+	}
+
+	result = cur;
+
+unlock_then_exit:
+	pthread_mutex_unlock(&bandlim_mutex);
+
+end:
+	return result;
+}
+
+void client_bandlim_detach(struct client_bandlim * what) {
+//FIXME: log!
+printf("*** client_bandlim_detach: %p\n", what);
+	if(what) {
+		pthread_mutex_lock(&bandlim_mutex);
+
+		if(0u == (--what->usage_count)) {
+			// This item is no more used and should be removed.
+			what->prev->next = what->next;
+			if(what->next)
+				what->next->prev = what->prev;
+
+			myfree(what->username);
+			myfree(what);
+//FIXME: log!
+printf("*** client_bandlim_detach: item destroyed!\n");
+		}
+
+		pthread_mutex_unlock(&bandlim_mutex);
+	}
+}
 
 int clientnegotiate(struct chain * redir, struct clientparam * param, struct sockaddr * addr, unsigned char * hostname){
 	unsigned char *buf;
@@ -492,14 +581,37 @@ void stopconnlims (struct clientparam *param){
 static void initbandlims (struct clientparam *param){
 	struct bandlim * be;
 	int i;
-	for(i=0, be = conf.bandlimiter; be && i<MAXBANDLIMS; be = be->next) {
+
+//FIXME:log!
+printf("*** initbandlims called!\n");
+
+	i = 0;
+	if(param->personal_bandlimin) {
+		// Personal bandlimin value should be set first.
+		// All other limits will have lower priority.
+		param->bandlims[i] = &param->personal_bandlimin->limit;
+		param->bandlimfunc = conf.bandlimfunc;
+
+		++i; // The counter should be incremented because the first slot
+			// is occuped.
+printf("*** initbandlims: personal_bandlimin slot %d!\n", (i-1));
+	}
+
+	// NOTE: we use the value of 'i' for the previous step.
+	for(be = conf.bandlimiter; be && i<MAXBANDLIMS; be = be->next) {
 		if(ACLmatches(be->ace, param)){
 			if(be->ace->action == NOBANDLIM) {
+//FIXME:log!
+printf("*** initbandlims: NOBANDLIM!\n");
 				break;
 			}
 			param->bandlims[i++] = be;
+printf("*** initbandlims: bandlims set for slot %d!\n", (i-1));
 			param->bandlimfunc = conf.bandlimfunc;
 		}
+else
+//FIXME:log!
+printf("*** initbandlims: !ACLmatches!\n");
 	}
 	if(i<MAXBANDLIMS)param->bandlims[i] = NULL;
 	for(i=0, be = conf.bandlimiterout; be && i<MAXBANDLIMS; be = be->next) {
@@ -535,6 +647,8 @@ unsigned bandlimitfunc(struct clientparam *param, unsigned nbytesin, unsigned nb
 	msec = tv.tv_usec;
 #endif
 	
+//FIXME: log!
+//printf("*** bandlimitfunc called, nbytesin=%d, nbytesout=%d\n", nbytesin, nbytesout);
 	if(!nbytesin && !nbytesout) return 0;
 	pthread_mutex_lock(&bandlim_mutex);
 	if(param->paused != conf.paused && param->bandlimver != conf.paused){
@@ -547,6 +661,8 @@ unsigned bandlimitfunc(struct clientparam *param, unsigned nbytesin, unsigned nb
 		param->bandlimver = conf.paused;
 	}
 	for(i=0; nbytesin&& i<MAXBANDLIMS && param->bandlims[i]; i++){
+//FIXME: log!
+//printf("*** bandlimitfunc: before check #1 (basetime=%ld, nexttime=%u), sec=%ld\n", param->bandlims[i]->basetime, param->bandlims[i]->nexttime, sec);
 		if( !param->bandlims[i]->basetime || 
 			param->bandlims[i]->basetime > sec ||
 			param->bandlims[i]->basetime < (sec - 120)
@@ -554,6 +670,8 @@ unsigned bandlimitfunc(struct clientparam *param, unsigned nbytesin, unsigned nb
 		{
 			param->bandlims[i]->basetime = sec;
 			param->bandlims[i]->nexttime = 0;
+//FIXME: log!
+//printf("*** bandlimitfunc: will be continued (basetime=%ld, nexttime=%u)\n", param->bandlims[i]->basetime, param->bandlims[i]->nexttime);
 			continue;
 		}
 		now = (unsigned)((sec - param->bandlims[i]->basetime) * 1000000) + msec;
@@ -562,6 +680,8 @@ unsigned bandlimitfunc(struct clientparam *param, unsigned nbytesin, unsigned nb
 		sleeptime = (nsleeptime > sleeptime)? nsleeptime : sleeptime;
 		param->bandlims[i]->basetime = sec;
 		param->bandlims[i]->nexttime = msec + nsleeptime + ((param->bandlims[i]->rate > 1000000)? ((nbytesin/32)*(256000000/param->bandlims[i]->rate)) : (nbytesin * (8000000/param->bandlims[i]->rate)));
+//FIXME: log!
+//printf("*** bandlimitfunc: params recalculated\n");
 	}
 	for(i=0; nbytesout && i<MAXBANDLIMS && param->bandlimsout[i]; i++){
 		if( !param->bandlimsout[i]->basetime || 
@@ -625,8 +745,21 @@ int alwaysauth(struct clientparam * param){
 
 
 	if(conf.connlimiter && param->remsock == INVALID_SOCKET && startconnlims(param)) return 95;
+//FIXME: log!
+printf("*** alwaysauth: before doconnect\n");
 	res = doconnect(param);
+printf("*** alwaysauth: after doconnect, res=%d\n", res);
 	if(!res){
+
+//FIXME: just a check!
+if(!param->personal_bandlimin) {
+	param->personal_bandlimin = client_bandlim_attach(param->username, 10000);
+	if(!param->personal_bandlimin) {
+		fprintf(stderr, "alwaysauth: client_bandlim_attach failed\n");
+		return 10001;
+	}
+}
+
 		initbandlims(param);
 		for(tc = conf.trafcounter; tc; tc = tc->next) {
 			if(tc->disabled) continue;
@@ -761,12 +894,25 @@ int doauth(struct clientparam * param){
 	char * tmp;
 	int ret = 0;
 
+//FIXME:log!
+printf("*** doauth called!\n");
+
 	for(authfuncs=param->srv->authfuncs; authfuncs; authfuncs=authfuncs->next){
+//FIXME:log!
+printf("*** try auth method: %s\n", authfuncs->desc);
 		res = authfuncs->authenticate?(*authfuncs->authenticate)(param):0;
+//FIXME:log!
+printf("*** auth method result: %s\n=%d", authfuncs->desc, res);
 		if(!res) {
+//FIXME:log!
+printf("*** successful auth!\n");
 			if(authfuncs->authorize &&
 				(res = (*authfuncs->authorize)(param)))
+{
+//FIXME:log!
+printf("*** failed authorization!\n");
 					return res;
+}
 
 			if(conf.authcachetype && authfuncs->authenticate && authfuncs->authenticate != cacheauth && param->username && (!(conf.authcachetype & AUTHCACHE_PASSWORD) || (!param->pwtype && param->password))){
 				pthread_mutex_lock(&hash_mutex);
@@ -833,7 +979,11 @@ int doauth(struct clientparam * param){
 		}
 		if(res > ret) ret = res;
 	}
+//FIXME: log!
+printf("out of authfuns loop, res=%d, ret=%d\n", res, ret);
 	if(!res){
+//FIXME: log!
+printf("calling alwaysauth\n");
 		return alwaysauth(param);
 	}
 

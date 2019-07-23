@@ -32,6 +32,9 @@ ssize_t splice(int fd_in, loff_t *off_in, int fd_out, loff_t *off_out, size_t le
 
 
 int splicemap(struct clientparam * param, int timeo){
+//FIXME: log!
+//printf("*** splicemap %d\n", timeo);
+
  struct pollfd fds[2];
  struct pollfd *fdsp = fds;
  int fdsc = 2;
@@ -195,6 +198,8 @@ int splicemap(struct clientparam * param, int timeo){
 
 	    if(param->bandlimfunc) {
 		    sleeptime = (*param->bandlimfunc)(param, res, 0);
+//FIXME: log!
+//printf("*** param->bandlimfunc called (6), sleeptime: %u\n", sleeptime);
 	    }
 	    srvstate = 0;
 	}
@@ -224,6 +229,8 @@ int splicemap(struct clientparam * param, int timeo){
 	    if(param->bandlimfunc) {
 		int sl1;
 		sl1 = (*param->bandlimfunc)(param, 0, res);
+//FIXME: log!
+//printf("*** param->bandlimfunc called (5), sleeptime: %u\n", sl1);
 		if(sl1 > sleeptime) sleeptime = sl1;
 	    }
 	    clistate = 0;
@@ -299,6 +306,10 @@ CLEANRET:
 
 
 int sockmap(struct clientparam * param, int timeo){
+
+//FIXME: log!
+//printf("*** sockmap %d\n", timeo);
+
  int res=0;
  uint64_t sent=0, received=0;
  SASIZETYPE sasize;
@@ -435,6 +446,8 @@ int sockmap(struct clientparam * param, int timeo){
 #endif
 		if(param->bandlimfunc) {
 			sleeptime = (*param->bandlimfunc)(param, param->srvinbuf - param->srvoffset, 0);
+//FIXME: log!
+//printf("*** param->bandlimfunc called (4), sleeptime: %u\n", sleeptime);
 		}
 		res = so._sendto(param->clisock, (char *)param->srvbuf + param->srvoffset,(!param->waitserver64 || (param->waitserver64 - received) > (param->srvinbuf - param->srvoffset))? param->srvinbuf - param->srvoffset : (int)(param->waitserver64 - received), 0, (struct sockaddr*)&param->sincr, sasize);
 		if(res < 0) {
@@ -460,6 +473,8 @@ int sockmap(struct clientparam * param, int timeo){
 			int sl1;
 
 			sl1 = (*param->bandlimfunc)(param, 0, param->cliinbuf - param->clioffset);
+//FIXME: log!
+//printf("*** param->bandlimfunc called (3), sleeptime: %u, sl1=%u\n", sleeptime, sl1);
 			if(sl1 > sleeptime) sleeptime = sl1;
 		}
 		res = so._sendto(param->remsock, (char *)param->clibuf + param->clioffset, (!param->waitclient64 || (param->waitclient64 - sent) > (param->cliinbuf - param->clioffset))? param->cliinbuf - param->clioffset : (int)(param->waitclient64 - sent), 0, (struct sockaddr*)&param->sinsr, sasize);

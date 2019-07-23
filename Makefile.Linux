@@ -59,7 +59,6 @@ INSTALL_OBJS	= bin/3proxy \
 		  bin/tcppm \
 		  bin/udppm
 		  
-
 INSTALL_CFG	 = scripts/3proxy.cfg.chroot
 INSTALL_CFG_OBJS = scripts/3proxy.cfg \
 		   scripts/add3proxyuser.sh

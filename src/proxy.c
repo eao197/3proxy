@@ -236,6 +236,9 @@ void * proxychild(struct clientparam* param) {
 #endif
 
 
+//FIXME: log!
+pthread_t self_id = pthread_self();
+printf("*** THREAD_SELF_ID: %ld\n", self_id);
 
  
  if(!(buf = myalloc(BUFSIZE))) {RETURN(21);}
@@ -878,7 +881,11 @@ for(;;){
  param->nwrites++;
  if(param->bandlimfunc) {
 	sleeptime = param->bandlimfunc(param, 0, (int)strlen((char *)buf));
+//FIXME: log!
+printf("*** param->bandlimfunc called (1), sleeptime: %u\n", sleeptime);
  }
+//FIXME: log!
+else printf("*** param->bandlimfunc not called (1)\n");
  if(contentlength64 > 0){
 	 param->nolongdatfilter = 0;
 	 param->waitclient64 = contentlength64;
@@ -962,12 +969,17 @@ for(;;){
 	int st1;
 
 	st1 = (*param->bandlimfunc)(param, inbuf, 0);
+//FIXME: log!
+printf("*** param->bandlimfunc called (2), sleeptime: %u, st1=%u\n", sleeptime, st1);
 	if(st1 > sleeptime) sleeptime = st1;
 	if(sleeptime > 0){
 /*		if(sleeptime > 30) sleeptime = 30; */
 		usleep(sleeptime * SLEEPTIME);
 	}
  }
+//FIXME: log!
+else printf("*** param->bandlimfunc not called (2)\n");
+
  buf[inbuf] = 0;
  if(inbuf < 9) {RETURN (522);}
 #ifndef WITHMAIN

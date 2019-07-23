@@ -328,6 +328,15 @@ struct bandlim {
 	unsigned rate;
 };
 
+//FIXME: document this!
+struct client_bandlim {
+	struct client_bandlim * next;
+	struct client_bandlim * prev;
+	char * username;
+	struct bandlim limit;
+	unsigned usage_count;
+};
+
 struct connlim {
 	struct connlim *next;
 	struct ace *ace;
@@ -549,6 +558,8 @@ struct clientparam {
 			*bandlimsout[MAXBANDLIMS];
 
 	time_t time_start;
+
+	struct client_bandlim * personal_bandlimin;
 };
 
 struct filemon {
