@@ -83,7 +83,6 @@ struct client_bandlim * client_bandlim_attach(
 	}
 
 	result = cur;
-printf("*** client_bandlim_attach: user=%s, dir=%d\n", result->username, result->direction); 
 
 unlock_then_exit:
 	pthread_mutex_unlock(&bandlim_mutex);
@@ -102,7 +101,6 @@ void client_bandlim_detach(struct client_bandlim * what) {
 			if(what->next)
 				what->next->prev = what->prev;
 
-printf("*** client_bandlim_detach: user=%s, dir=%d\n", what->username, what->direction); 
 			myfree(what->username);
 			myfree(what);
 		}
