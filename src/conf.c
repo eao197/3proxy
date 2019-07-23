@@ -1855,10 +1855,7 @@ int reload (void){
 
 	fp = confopen();
 	if(fp){
-//FIXME: log!
-printf("*** before readconfig\n");
 		error = readconfig(fp);
-printf("*** after readconfig\n");
 		conf.version++;
 		if(error) {
 			 freeconf(&conf);

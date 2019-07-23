@@ -593,12 +593,6 @@ int MODULEMAINFUNC (int argc, char** argv){
 			return -3;
 		}
 	}
-//FIXME:log!
-printf("*** bound to: %u\n", (unsigned)*SAPORT(&srv.intsa));
-//FIXME: log!
-pthread_t self_id = pthread_self();
-printf("*** MODULEMAINFUNC THREAD_SELF_ID: %ld\n", self_id);
-
 
  	if(!isudp){
  		if(so._listen (sock, 1 + (srv.maxchild>>4))==-1) {
@@ -924,9 +918,6 @@ void srvinit2(struct srvparam * srv, struct clientparam *param){
 }
 
 void srvfree(struct srvparam * srv){
-//FIXME: log!
-printf("*** srvfree for %u\n", (unsigned int)*SAPORT(&srv->intsa));
-
  if(srv->srvsock != INVALID_SOCKET) so._closesocket(srv->srvsock);
  srv->srvsock = INVALID_SOCKET;
  if(srv->cbsock != INVALID_SOCKET) so._closesocket(srv->cbsock);
@@ -960,9 +951,6 @@ printf("*** srvfree for %u\n", (unsigned int)*SAPORT(&srv->intsa));
 
 
 void freeparam(struct clientparam * param) {
-
-//FIXME: log!
-printf("*** freeparam %p\n", param);
 
 	if(param->res == 2) return;
 	if(param->datfilterssrv) myfree(param->datfilterssrv);
