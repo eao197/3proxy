@@ -325,9 +325,6 @@ int radsend(struct clientparam * param, int auth, int stop){
 	int vendorlen=0;
 	char buf[64];
 
-//FIXME: just for debugging!
-return 0;
-
 	if(!radiussecret || !nradservers) {
 		return 4;
 	}
