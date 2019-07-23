@@ -729,7 +729,7 @@ static int try_set_client_bandlimin_if_needed(struct clientparam * param) {
 
 	if(0u != conf.client_bandlimin_rate) {
 		if(!param->personal_bandlimin) {
-			param->personal_bandlimin = client_bandlim_attach(param, 10000);
+			param->personal_bandlimin = client_bandlim_attach(param, conf.client_bandlimin_rate);
 			if(!param->personal_bandlimin) {
 				fprintf(stderr, "alwaysauth: client_bandlim_attach failed\n");
 				result = 10001;
