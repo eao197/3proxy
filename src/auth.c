@@ -617,7 +617,20 @@ static void initbandlims (struct clientparam *param){
 		}
 	}
 	if(i<MAXBANDLIMS)param->bandlims[i] = NULL;
-	for(i=0, be = conf.bandlimiterout; be && i<MAXBANDLIMS; be = be->next) {
+
+	i = 0;
+	if(param->personal_bandlimout) {
+		// Personal bandlimout value should be set first.
+		// All other limits will have lower priority.
+		param->bandlimsout[i] = &param->personal_bandlimout->limit;
+		param->bandlimfunc = conf.bandlimfunc;
+
+		++i; // The counter should be incremented because the first slot
+			// is occuped.
+	}
+
+	// NOTE: we use the value of 'i' for the previous step.
+	for(be = conf.bandlimiterout; be && i<MAXBANDLIMS; be = be->next) {
 		if(ACLmatches(be->ace, param)){
 			if(be->ace->action == NOBANDLIM) {
 				break;
