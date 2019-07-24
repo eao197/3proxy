@@ -543,8 +543,6 @@ int radsend(struct clientparam * param, int auth, int stop){
 	// NOTE: after the implementation of round-robin for Radius the
 	// 'radserver_index' variable already has the initial value.
 	int send_attempts = 0;
-//FIXME:log!
-printf("*** radserver_index=%d, radservers_count=%d\n", radserver_index, radservers_count);
 	for (; send_attempts < radservers_count;
 			++send_attempts,
 			(radserver_index = (radserver_index+1) % radservers_count)) {
