@@ -166,6 +166,10 @@ static int ntry = 0;
 int nradservers = 0;
 char radiussecret[64]="";
 
+// Index in radiuslist that was used in the last call to radauth().
+// NOTE: should be read and written under acquired rad_mutex.
+static int last_used_server_index = 0;
+
 pthread_mutex_t rad_mutex;
 
 void md5_calc(unsigned char *output, unsigned char *input,
@@ -300,7 +304,6 @@ typedef struct radius_packet_t {
 
 int radsend(struct clientparam * param, int auth, int stop){
 
-	int loop;
 	int id;
 	int res = 4;
 	SOCKET sockfd = -1;
@@ -329,13 +332,24 @@ int radsend(struct clientparam * param, int auth, int stop){
 		return 4;
 	}
 
+	const int radservers_count = nradservers > MAXRADIUS ?
+			MAXRADIUS : nradservers;
+
 	memset(&packet, 0, sizeof(packet));
 
+
+	// Index of the first Radius server to try.
+	int radserver_index = 0;
 
 	pthread_mutex_lock(&rad_mutex);
 	if(auth)random_vector(packet.vector, param);
 
 	id = ((ntry++) & 0xff);
+
+	// Implementation of round-robin for RADIUS.
+	radserver_index = last_used_server_index;
+	last_used_server_index =
+			(last_used_server_index + 1) % radservers_count;
 	pthread_mutex_unlock(&rad_mutex);
 
 	packet.code = auth?PW_AUTHENTICATION_REQUEST:PW_ACCOUNTING_REQUEST;
@@ -526,11 +540,20 @@ int radsend(struct clientparam * param, int auth, int stop){
 	}
 	memcpy(vector, packet.vector, AUTH_VECTOR_LEN);
 	
-	for (loop = 0; loop < nradservers && loop < MAXRADIUS; loop++) {
+	// NOTE: after the implementation of round-robin for Radius the
+	// 'radserver_index' variable already has the initial value.
+	int send_attempts = 0;
+//FIXME:log!
+printf("*** radserver_index=%d, radservers_count=%d\n", radserver_index, radservers_count);
+	for (; send_attempts < radservers_count;
+			++send_attempts,
+			(radserver_index = (radserver_index+1) % radservers_count)) {
 		SOCKET remsock;
 
+		saremote = auth ?
+				radiuslist[radserver_index].authaddr
+				: radiuslist[radserver_index].logaddr;
 
-		saremote = auth?radiuslist[loop].authaddr : radiuslist[loop].logaddr;
 #ifdef NOIPV6
 		if(*SAFAMILY(&saremote)!= AF_INET) {
 			continue;
@@ -541,27 +564,21 @@ int radsend(struct clientparam * param, int auth, int stop){
 		}
 #endif
 
-/*
-		if(auth) {
-*/
-			if(sockfd >= 0) so._closesocket(sockfd);
-			if ((sockfd = so._socket(SASOCK(&saremote), SOCK_DGRAM, 0)) < 0) {
-			    return 4;
-			}
-			remsock = sockfd;
-/*
+		if(sockfd >= 0) so._closesocket(sockfd);
+		if ((sockfd = so._socket(SASOCK(&saremote), SOCK_DGRAM, 0)) < 0) {
+			 return 4;
 		}
-		else remsock = radiuslist[loop].logsock;
-*/
+		remsock = sockfd;
+
 		len = so._sendto(remsock, (char *)&packet, total_length, 0,
 		      (struct sockaddr *)&saremote, sizeof(saremote));
 		if(len != ntohs(packet.length)){
 			continue;
 		}
 
-	        memset(fds, 0, sizeof(fds));
-	        fds[0].fd = remsock;
-	        fds[0].events = POLLIN;
+		memset(fds, 0, sizeof(fds));
+		fds[0].fd = remsock;
+		fds[0].events = POLLIN;
 		if(so._poll(fds, 1, conf.timeouts[SINGLEBYTE_L]*1000) <= 0) {
 			continue;
 		}
@@ -605,7 +622,7 @@ int radsend(struct clientparam * param, int auth, int stop){
 				break;
 			}
 		
-	       		if (attr[1] < 2) {
+			if (attr[1] < 2) {
 				break;
 			}
 
