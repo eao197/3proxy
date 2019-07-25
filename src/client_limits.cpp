@@ -64,7 +64,7 @@ limits_map_t limits_map;
 class lock_guard_t {
 	pthread_mutex_t & lock_;
 public :
-	lock_guard_t(pthread_mutex_t & lock) noexcept : lock_{lock} {
+	lock_guard_t(pthread_mutex_t & lock) noexcept : lock_(lock) {
 		pthread_mutex_lock(&lock_);
 	}
 	~lock_guard_t() noexcept {
@@ -110,8 +110,8 @@ extern "C" struct client_limits_info_t {
 	}
 
 	client_limits_info_t(const client_limits_params_t & p) noexcept
-		: in_limit_{make_bandlim(p.in_rate)}
-		, out_limit_{make_bandlim(p.out_rate)}
+		: in_limit_(make_bandlim(p.in_rate))
+		, out_limit_(make_bandlim(p.out_rate))
 	{}
 };
 
