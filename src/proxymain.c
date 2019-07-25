@@ -1006,9 +1006,8 @@ void freeparam(struct clientparam * param) {
 		so._closesocket(param->clisock);
 	}
 
-	// Personal bandlim for incoming and outgoing traffic is no more needed.
-	client_bandlim_detach(param->personal_bandlimin);
-	client_bandlim_detach(param->personal_bandlimout);
+	// Personal data for limits for that client is no more needed.
+	client_limits_release(param->client_limits);
 
 	myfree(param);
 }

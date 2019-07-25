@@ -333,15 +333,8 @@ typedef enum {
 	CLIENT_BANDLIM_OUT=2
 } CLIENT_BANDLIM_DIR;
 
-//FIXME: document this!
-struct client_bandlim {
-	struct client_bandlim * next;
-	struct client_bandlim * prev;
-	CLIENT_BANDLIM_DIR direction;
-	char * username;
-	struct bandlim limit;
-	unsigned usage_count;
-};
+// This type if defined in client_limits.cpp.
+struct client_limits_info_t;
 
 struct connlim {
 	struct connlim *next;
@@ -565,10 +558,13 @@ struct clientparam {
 
 	time_t time_start;
 
+	// An information about limits for that client.
+	struct client_limits_info_t * client_limits;
+
 	// Optional band-limit for incoming traffic.
-	struct client_bandlim * personal_bandlimin;
+	struct bandlim * personal_bandlimin;
 	// Optional band-limit for outgoing traffic.
-	struct client_bandlim * personal_bandlimout;
+	struct bandlim * personal_bandlimout;
 };
 
 struct filemon {

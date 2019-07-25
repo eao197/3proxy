@@ -359,13 +359,5 @@ extern char * ceargv[32];
 
 #define WEBBANNERS 35
 
-//FIXME: document this!
-struct client_bandlim * client_bandlim_attach(
-	const struct clientparam * client,
-	CLIENT_BANDLIM_DIR direction,
-	unsigned rate);
-//NOTE: null-pointer can safely be passed here!
-void client_bandlim_detach(struct client_bandlim * what);
-
 #endif
 

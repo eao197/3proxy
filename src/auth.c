@@ -7,107 +7,7 @@
 */
 
 #include "proxy.h"
-
-//
-// Tools for working with client_bandlim.
-//
-
-// Head for list of client_bandlim items.
-// NOTE: holds items for incoming and outgoing traffic.
-static struct client_bandlim client_bandlim_head = {
-	NULL, NULL, 0 /*Direction: 0 is invalid value*/, NULL,
-	{ NULL, NULL, 0, 0, 0 },
-	0
-};
-
-struct client_bandlim * client_bandlim_attach(
-		const struct clientparam * client,
-		CLIENT_BANDLIM_DIR direction,
-		unsigned rate) {
-	// For the case if username is NULL.
-	char string_ip[INET6_ADDRSTRLEN];
-	const char * username = client->username;
-	struct client_bandlim * result = NULL;
-
-	if(!username) {
-		// An IP address should be used instead of a client name.
-		username = inet_ntop(*SAFAMILY(&client->sincr),
-				SAADDR(&client->sincr),
-				string_ip, INET6_ADDRSTRLEN);
-		if(!username) {
-			fprintf(stderr, "client_bandlim_attach: unable to convert "
-					"IP to string, errno: %d\n", errno);
-			goto end;
-		}
-	}
-
-	// Try to find already existing item in the list.
-	pthread_mutex_lock(&bandlim_mutex);
-
-	struct client_bandlim * cur = client_bandlim_head.next;
-	struct client_bandlim * last = &client_bandlim_head;
-	while(cur &&
-			!(direction == cur->direction
-			&& 0 == strcmp(cur->username, username))) {
-		last = cur;
-		cur = cur->next;
-	}
-
-	if(cur) {
-		// Existing item found. Usage counter should be incremented only.
-		cur->usage_count += 1u;
-	}
-	else {
-		// A new item should be created!
-		cur = myalloc(sizeof(struct client_bandlim));
-		if(!cur) {
-			fprintf(stderr, "client_bandlim_attach: no memory for "
-					"a new client_bandlim item\n");
-			goto unlock_then_exit;
-		}
-		cur->username = mystrdup(username);
-		if(!cur->username) {
-			fprintf(stderr, "client_bandlim_attach: no memory for "
-					"copy of username\n");
-			myfree(cur);
-			goto unlock_then_exit;
-		}
-		cur->prev = last;
-		cur->next = NULL;
-		cur->direction = direction;
-		memset(&cur->limit, 0, sizeof(cur->limit));
-		cur->limit.rate = rate;
-		cur->usage_count = 1u;
-
-		last->next = cur;
-	}
-
-	result = cur;
-
-unlock_then_exit:
-	pthread_mutex_unlock(&bandlim_mutex);
-
-end:
-	return result;
-}
-
-void client_bandlim_detach(struct client_bandlim * what) {
-	if(what) {
-		pthread_mutex_lock(&bandlim_mutex);
-
-		if(0u == (--what->usage_count)) {
-			// This item is no more used and should be removed.
-			what->prev->next = what->next;
-			if(what->next)
-				what->next->prev = what->prev;
-
-			myfree(what->username);
-			myfree(what);
-		}
-
-		pthread_mutex_unlock(&bandlim_mutex);
-	}
-}
+#include "client_limits.h"
 
 int clientnegotiate(struct chain * redir, struct clientparam * param, struct sockaddr * addr, unsigned char * hostname){
 	unsigned char *buf;
@@ -597,7 +497,7 @@ static void initbandlims (struct clientparam *param){
 	if(param->personal_bandlimin) {
 		// Personal bandlimin value should be set first.
 		// All other limits will have lower priority.
-		param->bandlims[i] = &param->personal_bandlimin->limit;
+		param->bandlims[i] = param->personal_bandlimin;
 		param->bandlimfunc = conf.bandlimfunc;
 
 		++i; // The counter should be incremented because the first slot
@@ -620,7 +520,7 @@ static void initbandlims (struct clientparam *param){
 	if(param->personal_bandlimout) {
 		// Personal bandlimout value should be set first.
 		// All other limits will have lower priority.
-		param->bandlimsout[i] = &param->personal_bandlimout->limit;
+		param->bandlimsout[i] = param->personal_bandlimout;
 		param->bandlimfunc = conf.bandlimfunc;
 
 		++i; // The counter should be incremented because the first slot
@@ -747,27 +647,23 @@ void trafcountfunc(struct clientparam *param){
 static int try_set_client_bandlimin_if_needed(struct clientparam * param) {
 	int result = 0;
 
-	if(0u != conf.client_bandlimin_rate) {
-		if(!param->personal_bandlimin) {
-			param->personal_bandlimin = client_bandlim_attach(
-					param, CLIENT_BANDLIM_IN, conf.client_bandlimin_rate);
+	if(!param->client_limits) {
+		struct client_limits_params_t limits = {
+				conf.client_bandlimin_rate,
+				conf.client_bandlimout_rate
+		};
+		param->client_limits = client_limits_make(param, &limits);
+		if(!param->client_limits) {
 			if(!param->personal_bandlimin) {
-				fprintf(stderr, "alwaysauth: client_bandlim_attach("
-						"CLIENT_BANDLIM_IN) failed\n");
-				result = 10001;
+				fprintf(stderr, "alwaysauth: client_limits_make failed\n");
+				result = 10000;
 			}
 		}
-	}
-
-	if(!result && 0u != conf.client_bandlimout_rate) {
-		if(!param->personal_bandlimout) {
-			param->personal_bandlimout = client_bandlim_attach(
-					param, CLIENT_BANDLIM_OUT, conf.client_bandlimout_rate);
-			if(!param->personal_bandlimout) {
-				fprintf(stderr, "alwaysauth: client_bandlim_attach("
-						"CLIENT_BANDLIM_OUT) failed\n");
-				result = 10002;
-			}
+		else {
+			param->personal_bandlimin = client_limits_bandlim(
+					param->client_limits, CLIENT_BANDLIM_IN);
+			param->personal_bandlimout = client_limits_bandlim(
+					param->client_limits, CLIENT_BANDLIM_OUT);
 		}
 	}
 
@@ -778,7 +674,6 @@ int alwaysauth(struct clientparam * param){
 	int res;
 	struct trafcount * tc;
 	int countout = 0;
-
 
 	if(conf.connlimiter && param->remsock == INVALID_SOCKET && startconnlims(param)) return 95;
 	res = doconnect(param);
