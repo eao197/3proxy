@@ -29,22 +29,32 @@ operator<(const key_t & a, const key_t & b) noexcept {
 			std::tie(b.client_id_, b.service_id_);
 }
 
+template<typename Addr>
+std::string
+ip_to_string(const Addr & addr) {
+	char string_ip[INET6_ADDRSTRLEN];
+	const char * ip = inet_ntop(*SAFAMILY(&addr), SAADDR(&addr),
+			string_ip, INET6_ADDRSTRLEN);
+	if(!ip) {
+		throw std::runtime_error("unable to convert client IP to string");
+	}
+	return ip;
+}
+
 std::string
 make_client_id(const clientparam * client) {
 	const char * username = reinterpret_cast<char *>(client->username);
 
-	if(!username) {
+	if(username) 
+		return username;
+	else
 		// An IP address should be used instead of a client name.
-		char string_ip[INET6_ADDRSTRLEN];
-		username = inet_ntop(*SAFAMILY(&client->sincr),
-				SAADDR(&client->sincr),
-				string_ip, INET6_ADDRSTRLEN);
-		if(!username) {
-			throw std::runtime_error("unable to convert client IP to string");
-		}
-	}
+		return ip_to_string(client->sincr);
+}
 
-	return username;
+std::string
+make_service_id(const clientparam * client) {
+	return "ext_ip=" + ip_to_string(client->sinsl) + ";";
 }
 
 using limits_map_t = std::map<key_t, client_limits_info_t>;
@@ -114,7 +124,10 @@ client_limits_make(
 	return exception_catcher("client_limits_make", [&] {
 			lock_guard_t lock{bandlim_mutex};
 
-			client_limits::key_t client_key{make_client_id(client), "not-used-yet"};
+			client_limits::key_t client_key{
+					make_client_id(client),
+					make_service_id(client)
+			};
 			auto it = limits_map.find(client_key);
 			if(it != limits_map.end()) {
 				// Reuse existing client info.
@@ -122,6 +135,7 @@ client_limits_make(
 				return &it->second;
 			}
 			else {
+printf("*** create info for a key: (%s,%s)\n", client_key.client_id_.c_str(), client_key.service_id_.c_str());
 				// A new client info should be created.
 				auto ins_result = limits_map.emplace(
 						client_key,
