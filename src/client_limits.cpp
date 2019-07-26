@@ -77,7 +77,7 @@ public :
 };
 
 template<typename Lambda, typename T>
-T exception_catcher(const char * where, Lambda && lambda, T on_exception_value) {
+T exception_catcher(const char * where, Lambda && lambda, T on_exception_value) noexcept {
 	try {
 		return lambda();
 	}
@@ -124,7 +124,7 @@ extern "C" struct client_limits_info_t {
 namespace {
 
 bandlim *
-query_appropriate_bandlim_ptr(bandlim & lim_info) {
+query_appropriate_bandlim_ptr(bandlim & lim_info) noexcept {
 	if(0 == lim_info.rate)
 		// Band-limit is not set!
 		return nullptr_of<bandlim>();
@@ -248,15 +248,8 @@ client_limits_bandlim(
 	if(!what)
 		return nullptr;
 
-	const auto handler = [what](bandlim & lim_info) {
-		if(0 == lim_info.rate)
-			// Band-limit is not set!
-			return nullptr_of<bandlim>();
-		else
-			return &lim_info;
-	};
-
 	return CLIENT_BANDLIM_IN == direction ?
-			handler(what->in_limit_) : handler(what->out_limit_);
+			query_appropriate_bandlim_ptr(what->in_limit_) :
+			query_appropriate_bandlim_ptr(what->out_limit_);
 }
 
