@@ -489,7 +489,7 @@ void stopconnlims (struct clientparam *param){
 	pthread_mutex_unlock(&connlim_mutex);
 }
 
-static void initbandlims (struct clientparam *param){
+void initbandlims (struct clientparam *param){
 	struct bandlim * be;
 	int i;
 

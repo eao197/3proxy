@@ -200,8 +200,7 @@ void dumpcounters(struct trafcount *tl, int counterd);
 
 int startconnlims (struct clientparam *param);
 void stopconnlims (struct clientparam *param);
-
-
+void initbandlims (struct clientparam *param);
 
 extern struct auth authfuncs[];
 

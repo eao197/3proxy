@@ -121,6 +121,57 @@ extern "C" struct client_limits_info_t {
 	{}
 };
 
+namespace {
+
+bandlim *
+query_appropriate_bandlim_ptr(bandlim & lim_info) {
+	if(0 == lim_info.rate)
+		// Band-limit is not set!
+		return nullptr_of<bandlim>();
+	else
+		return &lim_info;
+};
+
+void
+handle_limits_change_if_any(
+		client_limits_info_t & info,
+		const client_limits_params_t & new_limits) noexcept {
+
+	const auto reconfig_limit_if_necessary = [](
+			bandlim & lim_info,
+			const unsigned new_rate) {
+		if(lim_info.rate != new_rate) {
+			lim_info.rate = new_rate;
+			lim_info.basetime = 0;
+			lim_info.nexttime = 0;
+		}
+	};
+
+	const auto old_pointers = std::make_tuple(
+			query_appropriate_bandlim_ptr(info.in_limit_),
+			query_appropriate_bandlim_ptr(info.out_limit_));
+
+	reconfig_limit_if_necessary(info.in_limit_, new_limits.in_rate);
+	reconfig_limit_if_necessary(info.out_limit_, new_limits.out_rate);
+
+	const auto new_pointers = std::make_tuple(
+			query_appropriate_bandlim_ptr(info.in_limit_),
+			query_appropriate_bandlim_ptr(info.out_limit_));
+
+	if(old_pointers != new_pointers) {
+		// Pointers to bandlim objects must be updated.
+		// We can do it becasuse handle_limits_change_if_any is called
+		// when bandlim_mutex is acquired.
+		for(auto * client : info.connections_) {
+			client->personal_bandlimin = std::get<0>(new_pointers);
+			client->personal_bandlimout = std::get<1>(new_pointers);
+			initbandlims(client);
+		}
+	}
+}
+
+} /* namespace anonymous */
+
 extern "C"
 struct client_limits_info_t *
 client_limits_make(
@@ -141,7 +192,8 @@ client_limits_make(
 				// Another connection should be stored.
 				it->second.connections_.push_back(client);
 
-//FIXME: bandlim change should be handled here!
+				handle_limits_change_if_any(it->second, *limits);
+
 				return &it->second;
 			}
 			else {
