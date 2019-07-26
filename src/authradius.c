@@ -366,7 +366,7 @@ int radsend(struct clientparam * param, int auth, int stop){
 
 	/* Acct-Session-Id */
 	sprintf(buf, "%u.%u.%u", (unsigned)param->time_start, (unsigned)param->msec_start, (unsigned)param->threadid);
-        len = strlen(buf);
+	len = strlen(buf);
 	*ptr++ =  PW_ACCT_SESSION_ID;
 	*ptr++ = 2+len;
 	memcpy(ptr, buf, len);
@@ -516,18 +516,18 @@ int radsend(struct clientparam * param, int auth, int stop){
 	}
 	
 	if(auth && param->password){
-    	    len = strlen(param->password);
-	    if(len > 128) len = 128;
-	    *ptr++ = PW_PASSWORD;
-	    ptr++;
-	    memcpy(ptr, param->password, len);
-	    rad_pwencode(ptr,
-		     &len,
-		     radiussecret, 
-		     (char *)packet.vector);
-	    *(ptr-1) = len + 2;
-	    ptr+=len;
-	    total_length+= (len+2);
+ 		len = strlen(param->password);
+		if(len > 128) len = 128;
+		*ptr++ = PW_PASSWORD;
+		ptr++;
+		memcpy(ptr, param->password, len);
+		rad_pwencode(ptr,
+			&len,
+			radiussecret, 
+			(char *)packet.vector);
+		*(ptr-1) = len + 2;
+		ptr+=len;
+		total_length+= (len+2);
 	}
 
 	total_length+=(4+AUTH_VECTOR_LEN);

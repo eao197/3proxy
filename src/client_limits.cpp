@@ -135,7 +135,6 @@ client_limits_make(
 				return &it->second;
 			}
 			else {
-printf("*** create info for a key: (%s,%s)\n", client_key.client_id_.c_str(), client_key.service_id_.c_str());
 				// A new client info should be created.
 				auto ins_result = limits_map.emplace(
 						client_key,
@@ -161,7 +160,6 @@ client_limits_release(client_limits_info_t * what) {
 
 	what->usage_count_ -= 1;
 	if(!what->usage_count_) {
-printf("*** remove client_limits_info_t: %s, %s\n", what->position_->first.client_id_.c_str(), what->position_->first.service_id_.c_str());
 		// This item is no more needed.
 		limits_map.erase(what->position_);
 	}
