@@ -1007,7 +1007,7 @@ void freeparam(struct clientparam * param) {
 	}
 
 	// Personal data for limits for that client is no more needed.
-	client_limits_release(param->client_limits);
+	client_limits_release(param, param->client_limits);
 
 	myfree(param);
 }

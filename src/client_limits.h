@@ -22,12 +22,14 @@ struct client_limits_params_t {
 // NOTE: returns NULL pointer in the case of an error.
 struct client_limits_info_t *
 client_limits_make(
-	const struct clientparam * client,
+	struct clientparam * client,
 	const struct client_limits_params_t * limits);
 
 // NOTE: it's safe to pass NULL as 'what'.
 void
-client_limits_release(struct client_limits_info_t * what);
+client_limits_release(
+	struct clientparam * client,
+	struct client_limits_info_t * what);
 
 struct bandlim *
 client_limits_bandlim(

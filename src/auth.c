@@ -654,17 +654,18 @@ static int try_set_client_bandlimin_if_needed(struct clientparam * param) {
 		};
 		param->client_limits = client_limits_make(param, &limits);
 		if(!param->client_limits) {
-			if(!param->personal_bandlimin) {
-				fprintf(stderr, "alwaysauth: client_limits_make failed\n");
-				result = 10000;
-			}
+			fprintf(stderr, "alwaysauth: client_limits_make failed\n");
+			result = 10000;
 		}
-		else {
-			param->personal_bandlimin = client_limits_bandlim(
-					param->client_limits, CLIENT_BANDLIM_IN);
-			param->personal_bandlimout = client_limits_bandlim(
-					param->client_limits, CLIENT_BANDLIM_OUT);
-		}
+	}
+
+	if(param->client_limits && !param->personal_bandlimin) {
+		param->personal_bandlimin = client_limits_bandlim(
+				param->client_limits, CLIENT_BANDLIM_IN);
+	}
+	if(param->client_limits && !param->personal_bandlimout) {
+		param->personal_bandlimout = client_limits_bandlim(
+				param->client_limits, CLIENT_BANDLIM_OUT);
 	}
 
 	return result;

@@ -11,6 +11,8 @@ extern "C" {
 #include <map>
 #include <string>
 #include <tuple>
+#include <vector>
+#include <algorithm>
 
 #include <cstdio>
 
@@ -61,6 +63,8 @@ using limits_map_t = std::map<key_t, client_limits_info_t>;
 
 limits_map_t limits_map;
 
+using clientparam_ptr_container_t = std::vector<clientparam *>;
+
 class lock_guard_t {
 	pthread_mutex_t & lock_;
 public :
@@ -100,7 +104,9 @@ extern "C" struct client_limits_info_t {
 	bandlim in_limit_;
 	bandlim out_limit_;
 
-	unsigned usage_count_{1};
+	// Pointers to actual connections of that client.
+	// If that vector is empty then there is no actual connections.
+	clientparam_ptr_container_t connections_;
 
 	limits_map_t::iterator position_;
 
@@ -118,7 +124,7 @@ extern "C" struct client_limits_info_t {
 extern "C"
 struct client_limits_info_t *
 client_limits_make(
-	const clientparam * client,
+	clientparam * client,
 	const client_limits_params_t * limits) {
 
 	return exception_catcher("client_limits_make", [&] {
@@ -131,7 +137,11 @@ client_limits_make(
 			auto it = limits_map.find(client_key);
 			if(it != limits_map.end()) {
 				// Reuse existing client info.
-				it->second.usage_count_ += 1u;
+
+				// Another connection should be stored.
+				it->second.connections_.push_back(client);
+
+//FIXME: bandlim change should be handled here!
 				return &it->second;
 			}
 			else {
@@ -144,6 +154,9 @@ client_limits_make(
 				// It allows cheap deletion of that item when it is no more needed.
 				result->position_ = ins_result.first;
 
+				// Another connection should be stored.
+				result->connections_.push_back(client);
+
 				return result;
 			}
 		},
@@ -152,14 +165,23 @@ client_limits_make(
 
 extern "C"
 void
-client_limits_release(client_limits_info_t * what) {
+client_limits_release(
+		clientparam * client,
+		client_limits_info_t * what) {
+
 	if(!what)
 		return;
 
 	lock_guard_t lock{bandlim_mutex};
 
-	what->usage_count_ -= 1;
-	if(!what->usage_count_) {
+	// Remove this connection from known connections.
+	what->connections_.erase(
+			std::remove(
+					what->connections_.begin(), what->connections_.end(), client),
+			what->connections_.end());
+
+	if(what->connections_.empty()) {
+printf("*** client info erased: (%s, %s)\n", what->position_->first.client_id_.c_str(), what->position_->first.service_id_.c_str());
 		// This item is no more needed.
 		limits_map.erase(what->position_);
 	}
