@@ -16,6 +16,99 @@ extern "C" {
 
 #include <cstdio>
 
+//NOTE: the following code borrowed from SObjectizer project
+// https://bitbucket.org/sobjectizerteam/sobjectizer
+namespace so_5 {
+
+namespace details {
+
+namespace rollback_on_exception_details {
+
+/*!
+ * \since
+ * v.5.5.4
+ *
+ * \brief Helper template class for do rollback actions automatically
+ * in the destructor.
+ *
+ * \tparam L type of lambda with rollback actions.
+ */
+template< typename L >
+class rollbacker_t
+	{
+		L & m_action;
+		bool m_commited = false;
+
+	public :
+		inline rollbacker_t( L & action ) : m_action( action ) {}
+		inline ~rollbacker_t() { if( !m_commited ) m_action(); }
+
+		inline void commit() { m_commited = true; }
+	};
+
+template< typename Result, typename Main_Action, typename Rollback_Action >
+struct executor
+	{
+		static Result
+		exec(
+			Main_Action main_action,
+			rollbacker_t< Rollback_Action > & rollback )
+			{
+				auto r = main_action();
+				rollback.commit();
+
+				return r;
+			}
+	};
+
+template< typename Main_Action, typename Rollback_Action >
+struct executor< void, Main_Action, Rollback_Action >
+	{
+		static void
+		exec( 
+			Main_Action main_action,
+			rollbacker_t< Rollback_Action > & rollback )
+			{
+				main_action();
+				rollback.commit();
+			}
+	};
+
+} /* namespace rollback_on_exception_details */
+
+/*!
+ * \since
+ * v.5.5.4
+ *
+ * \brief Helper function for do some action with rollback in the case of
+ * an exception.
+ *
+ * \tparam Main_Action type of lambda with main action.
+ * \tparam Rollback_Action type of lambda with rollback action.
+ */
+template< typename Main_Action, typename Rollback_Action >
+auto
+do_with_rollback_on_exception(
+	Main_Action main_action,
+	Rollback_Action rollback_action )
+	-> decltype(main_action())
+	{
+		using result_type = decltype(main_action());
+
+		using namespace rollback_on_exception_details;
+
+		rollbacker_t< Rollback_Action > rollbacker{ rollback_action };
+
+		return executor< result_type, Main_Action, Rollback_Action >::exec(
+				main_action, rollbacker );
+	}
+
+} /* namespace details */
+
+} /* namespace so_5 */
+
+using namespace so_5::details;
+
 namespace client_limits {
 
 struct key_t {
@@ -207,9 +300,14 @@ client_limits_make(
 				result->position_ = ins_result.first;
 
 				// Another connection should be stored.
-				result->connections_.push_back(client);
-
-				return result;
+				// In the case of an exception the modification of
+				// limits_map should be rolled back.
+				return do_with_rollback_on_exception(
+						[&] {
+							result->connections_.push_back(client);
+							return result;
+						},
+						[&] { limits_map.erase(ins_result.first); });
 			}
 		},
 		nullptr_of<client_limits_info_t>());
