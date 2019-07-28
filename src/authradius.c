@@ -302,6 +302,26 @@ typedef struct radius_packet_t {
           
 #define RETURN(xxx) { res = xxx; goto CLEANRET; }
 
+//FIXME: test only!
+void dump_vendor_specific_attribute(unsigned vsa_len, const unsigned char * attr) {
+	uint32_t vendor_id = (((uint32_t)attr[2])<<24) +
+			(((uint32_t)attr[3])<<16) +
+			(((uint32_t)attr[4])<<8) +
+			((uint32_t)(attr[5]));
+
+	printf("=== Type: %u, Length: %u, Vendor-Id: %u\n",
+			(unsigned)attr[0], (unsigned)(attr[1]), vendor_id);
+
+	const unsigned char * end = attr + vsa_len;
+	attr += 6;
+	while(attr != end) {
+		printf("===== ");
+		for(int i = 0; i != 16 && attr != end; ++i, ++attr)
+			printf("%02x ", (unsigned)*attr);
+		printf("\n");
+	}
+}
+
 int radsend(struct clientparam * param, int auth, int stop){
 
 	int id;
@@ -578,6 +598,8 @@ int radsend(struct clientparam * param, int auth, int stop){
 		fds[0].fd = remsock;
 		fds[0].events = POLLIN;
 		if(so._poll(fds, 1, conf.timeouts[SINGLEBYTE_L]*1000) <= 0) {
+//FIXME: test only!
+printf("*** reply timedout!\n");
 			continue;
 		}
 
@@ -590,6 +612,9 @@ int radsend(struct clientparam * param, int auth, int stop){
 		if (data_len < 20) {
 			continue;
 		}
+
+//FIXME: test only!
+printf("*** rpacket.code=%u\n", (unsigned)rpacket.code);
 
 		if( auth && rpacket.code != PW_AUTHENTICATION_ACK &&
 		    rpacket.code != PW_AUTHENTICATION_REJECT ){
@@ -626,6 +651,8 @@ int radsend(struct clientparam * param, int auth, int stop){
 
 			if(!vendor && attr[0] == PW_VENDOR_SPECIFIC) {
 				if (attr[1] < 6 || count < 6) RETURN(4);
+//FIXME: test only!
+dump_vendor_specific_attribute((unsigned)(unsigned char)attr[1], attr);
 				vendorlen = attr[1]-6;
 				vendor = htonl(*((int*)(attr +2)));
 				count -= 6;
