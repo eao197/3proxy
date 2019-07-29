@@ -559,6 +559,14 @@ struct clientparam {
 	time_t time_start;
 
 	// An information about limits for that client.
+	// This information is acquired during authentification of the client.
+	// It will be then used for building of `client_limits` value and
+	// `personal_bandlimin`/`personal_bandlimout`.
+	// Values 0 mean that limits are no set.
+	unsigned personal_bandlimin_rate;
+	unsigned personal_bandlimout_rate;
+
+	// An information about limits for that client.
 	struct client_limits_info_t * client_limits;
 
 	// Optional band-limit for incoming traffic.

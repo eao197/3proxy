@@ -649,11 +649,16 @@ static int try_set_client_bandlimin_if_needed(struct clientparam * param) {
 
 	if(!param->client_limits) {
 		struct client_limits_params_t limits = {
-				conf.client_bandlimin_rate,
-				conf.client_bandlimout_rate
+				0u != param->personal_bandlimin_rate ?
+						param->personal_bandlimin_rate :
+						conf.client_bandlimin_rate,
+				0u != param->personal_bandlimout_rate ?
+						param->personal_bandlimout_rate :
+						conf.client_bandlimout_rate
 		};
 		param->client_limits = client_limits_make(param, &limits);
 		if(!param->client_limits) {
+//FIXME: standard logging via param->svr should be used!
 			fprintf(stderr, "alwaysauth: client_limits_make failed\n");
 			result = 10000;
 		}
@@ -757,6 +762,11 @@ struct authcache {
 #endif
 	// NOTE: will be used only if srvport is specified in authcache options.
 	in_port_t srvport;
+
+	// Optional band-limits.
+	unsigned personal_bandlimin_rate;
+	unsigned personal_bandlimout_rate;
+
 	struct authcache *next;
 } *authc = NULL;
 
@@ -801,6 +811,9 @@ int cacheauth(struct clientparam * param){
 				myfree(param->username);
 			}
 			param->username = (unsigned char *)mystrdup(ac->username);
+			param->personal_bandlimin_rate = ac->personal_bandlimin_rate;
+			param->personal_bandlimout_rate = ac->personal_bandlimout_rate;
+
 			pthread_mutex_unlock(&hash_mutex);
 			return 0;
 		}
@@ -827,6 +840,7 @@ int doauth(struct clientparam * param){
 					return res;
 
 			if(conf.authcachetype && authfuncs->authenticate && authfuncs->authenticate != cacheauth && param->username && (!(conf.authcachetype & AUTHCACHE_PASSWORD) || (!param->pwtype && param->password))){
+printf("### [doauth] try search in cache: %s, %s\n", param->username, param->password);
 				pthread_mutex_lock(&hash_mutex);
 				for(ac = authc; ac; ac = ac->next){
 					if((!(conf.authcachetype & AUTHCACHE_USERNAME)
@@ -860,6 +874,8 @@ int doauth(struct clientparam * param){
 						if((conf.authcachetype & AUTHCACHE_SRVPORT)) {
 							ac->srvport = *SAPORT(&param->srv->intsa);
 						}
+						ac->personal_bandlimin_rate = param->personal_bandlimin_rate;
+						ac->personal_bandlimout_rate = param->personal_bandlimout_rate;
 						break;
 					}
 				}
@@ -881,7 +897,12 @@ int doauth(struct clientparam * param){
 						if((conf.authcachetype & AUTHCACHE_PASSWORD) && param->password) {
 							ac->password = mystrdup((char *)param->password);
 						}
+
+						ac->personal_bandlimin_rate = param->personal_bandlimin_rate;
+						ac->personal_bandlimout_rate = param->personal_bandlimout_rate;
 					}
+
+//FIXME: this will lead to access violation if myalloc returns NULL.
 					ac->next = authc;
 					authc = ac;
 				}

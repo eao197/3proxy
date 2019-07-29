@@ -302,23 +302,38 @@ typedef struct radius_packet_t {
           
 #define RETURN(xxx) { res = xxx; goto CLEANRET; }
 
+static uint32_t uint32_from_bytes(const unsigned char * buf) {
+	return (((uint32_t)buf[0])<<24) + (((uint32_t)buf[1])<<16) +
+			(((uint32_t)buf[2])<<8) + ((uint32_t)(buf[3]));
+}
+
+static void try_extract_bandlim_rates_from_vsa(
+		struct clientparam * param,
+		const unsigned char * whole_vsa) {
+
+	const uint8_t vsa_length = (uint8_t)whole_vsa[1];
+	const uint32_t vendor_id = uint32_from_bytes(&whole_vsa[2]);
+
+	// 44900 is a vendor ID for Biterica.
+	if(44900u == vendor_id &&
+			// 1 -- Type.
+			// 1 -- Length.
+			// 4 -- Vendor-Id.
+			// 1 -- Vendor-Type-Id.
+			// 1 -- Vendor-Length.
+			// 4 -- sizeof VSA payload. We expect and Integer value.
+			vsa_length == (1u+1u+4u+1u+1u+4u)) {
+		const uint8_t vendor_id = whole_vsa[6];
+		if(0x01 == vendor_id) {
+			param->personal_bandlimin_rate = uint32_from_bytes(&whole_vsa[8]);
 //FIXME: test only!
-void dump_vendor_specific_attribute(unsigned vsa_len, const unsigned char * attr) {
-	uint32_t vendor_id = (((uint32_t)attr[2])<<24) +
-			(((uint32_t)attr[3])<<16) +
-			(((uint32_t)attr[4])<<8) +
-			((uint32_t)(attr[5]));
-
-	printf("=== Type: %u, Length: %u, Vendor-Id: %u\n",
-			(unsigned)attr[0], (unsigned)(attr[1]), vendor_id);
-
-	const unsigned char * end = attr + vsa_len;
-	attr += 6;
-	while(attr != end) {
-		printf("===== ");
-		for(int i = 0; i != 16 && attr != end; ++i, ++attr)
-			printf("%02x ", (unsigned)*attr);
-		printf("\n");
+printf("=== personal_bandlimin_rate: %u\n", param->personal_bandlimin_rate);
+		}
+		else if(0x02 == vendor_id) {
+			param->personal_bandlimout_rate = uint32_from_bytes(&whole_vsa[8]);
+//FIXME: test only!
+printf("=== personal_bandlimout_rate: %u\n", param->personal_bandlimout_rate);
+		}
 	}
 }
 
@@ -566,6 +581,10 @@ int radsend(struct clientparam * param, int auth, int stop){
 	for (; send_attempts < radservers_count;
 			++send_attempts,
 			(radserver_index = (radserver_index+1) % radservers_count)) {
+
+		param->personal_bandlimin_rate = 0u;
+		param->personal_bandlimout_rate = 0u;
+
 		SOCKET remsock;
 
 		saremote = auth ?
@@ -598,8 +617,6 @@ int radsend(struct clientparam * param, int auth, int stop){
 		fds[0].fd = remsock;
 		fds[0].events = POLLIN;
 		if(so._poll(fds, 1, conf.timeouts[SINGLEBYTE_L]*1000) <= 0) {
-//FIXME: test only!
-printf("*** reply timedout!\n");
 			continue;
 		}
 
@@ -612,9 +629,6 @@ printf("*** reply timedout!\n");
 		if (data_len < 20) {
 			continue;
 		}
-
-//FIXME: test only!
-printf("*** rpacket.code=%u\n", (unsigned)rpacket.code);
 
 		if( auth && rpacket.code != PW_AUTHENTICATION_ACK &&
 		    rpacket.code != PW_AUTHENTICATION_REJECT ){
@@ -651,8 +665,9 @@ printf("*** rpacket.code=%u\n", (unsigned)rpacket.code);
 
 			if(!vendor && attr[0] == PW_VENDOR_SPECIFIC) {
 				if (attr[1] < 6 || count < 6) RETURN(4);
-//FIXME: test only!
-dump_vendor_specific_attribute((unsigned)(unsigned char)attr[1], attr);
+
+				try_extract_bandlim_rates_from_vsa(param, attr);
+
 				vendorlen = attr[1]-6;
 				vendor = htonl(*((int*)(attr +2)));
 				count -= 6;

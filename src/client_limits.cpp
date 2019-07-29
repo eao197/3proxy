@@ -271,6 +271,9 @@ client_limits_make(
 	clientparam * client,
 	const client_limits_params_t * limits) {
 
+//FIXME: test only!
+printf("### client: %p, in_rate: %u, out_rate: %u\n", client, limits->in_rate,limits->out_rate);
+
 	return exception_catcher("client_limits_make", [&] {
 			lock_guard_t lock{bandlim_mutex};
 
