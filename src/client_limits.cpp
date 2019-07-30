@@ -8,13 +8,21 @@ extern "C" {
 
 }
 
+#include "variant.hpp"
+
 #include <map>
 #include <string>
 #include <tuple>
 #include <vector>
 #include <algorithm>
+#include <chrono>
+#include <mutex>
 
 #include <cstdio>
+
+using namespace nonstd;
+
+using steady_clock = std::chrono::steady_clock;
 
 //NOTE: the following code borrowed from SObjectizer project
 // https://bitbucket.org/sobjectizerteam/sobjectizer
@@ -197,13 +205,40 @@ constexpr T* nullptr_of() noexcept { return static_cast<T*>(nullptr); }
 class authsubsys_t {
 	std::mutex lock_;
 
+	struct not_authentificated_user_t {
+//FIXME: fill with the actual data.
+	};
+
+	struct authentificated_user_t {
+//FIXME: fill with the actual data.
+	};
+
+	struct banned_user_t {
+//FIXME: fill with the actual data.
+	};
+
+	using user_info_variant_t = variant<
+			not_authentificated_user_t,
+			authentificated_user_t,
+			banned_user_t>;
+
 	struct user_info_t {
-//FIXME: fill the struct with actual data.
+		// A time point at that this information should be invalidated.
+		steady_clock::time_point expires_at_;
+
+		// An information about the user.
+		user_info_variant_t info_;
 	};
 
 	using client_map_t = std::map<key_t, user_info_t>;
 
 	client_map_t clients_;
+
+	static bool
+	is_banned_user(const user_info_t & info) noexcept;
+
+	static bool
+	is_authentificated_user(const user_info_t & info) noexcept;
 
 	// For the case when already authentificated client is present in
 	// the cache.
@@ -237,43 +272,14 @@ public:
 	authentificate_user(clientparam * client);
 };
 
-authsubsys_auth_result_t
-authsubsys_t::authentificate_user(clientparam * client) {
-	key_t client_key{make_client_id(client), make_service_id(client)};
+bool
+authsubsys_t::is_banned_user(const user_info_t & info) noexcept {
+	return 2u == info.info_.index();
+}
 
-	const auto current_time = steady_clock::now();
-
-	// Try to find previous information about that client.
-	{
-		std::lock_guard<std::mutex> l{lock_};
-		auto it = clients_.find(client_key);
-		if(it != clients_.end()) {
-			if(it->second.expires_at_ >= current_time) {
-				// Information about that client already expired and should
-				// be removed.
-				clients_.erase(it);
-				it = clients_.end();
-			}
-			else if(is_denied_user(it->second))
-				return authsubsys_auth_denied;
-			else if(is_authentificated_user(it->second))
-				// Some information should be updated in 'client' object.
-				return complete_successful_auth(client, it->second);
-		}
-	}
-
-	// Actual authentication should be performed here.
-	int authfunc_result = 4;
-	//FIXME: there should be a loop over client->srv->authfuncs.
-
-	// The object's lock should be acquired to complete the operation.
-	{
-		std::lock_guard<std::mutex> lock{lock_};
-
-		return 0 == authfunc_result ?
-				complete_successfule_auth(client, std::move(key)) :
-				complete_denied_auth(client, std::move(key));
-	}
+bool
+authsubsys_t::is_authentificated_user(const user_info_t & info) noexcept {
+	return 1u == info.info_.index();
 }
 
 authsubsys_auth_result_t
@@ -301,6 +307,57 @@ authsubsys_t::complete_denied_auth(
 
 //FIXME: implement this!
 return authsubsys_auth_failed;
+}
+
+authsubsys_auth_result_t
+authsubsys_t::authentificate_user(clientparam * client) {
+	key_t client_key{make_client_id(client), make_service_id(client)};
+
+	const auto current_time = steady_clock::now();
+
+	// Try to find previous information about that client.
+	{
+		std::lock_guard<std::mutex> l{lock_};
+		auto it = clients_.find(client_key);
+		if(it != clients_.end()) {
+			if(it->second.expires_at_ >= current_time) {
+				// Information about that client already expired and should
+				// be removed.
+				clients_.erase(it);
+				it = clients_.end();
+			}
+			else if(is_banned_user(it->second))
+				return authsubsys_auth_denied;
+			else if(is_authentificated_user(it->second))
+				// Some information should be updated in 'client' object.
+				return complete_successful_auth(client, it->second);
+		}
+	}
+
+	// Actual authentication should be performed here.
+	int authfunc_result = 4;
+	// Iterate over defined authmethods for the service.
+	for(auth * authfuncs=client->srv->authfuncs;
+			authfuncs;
+			authfuncs = authfuncs->next) {
+		authfunc_result = authfuncs->authenticate ?
+				(*authfuncs->authenticate)(client) : 0;
+		if(!authfunc_result) {
+			if(authfuncs->authorize &&
+					(authfunc_result = (*authfuncs->authorize)(client))) {
+				break; // There is no sense to go to the next authfunc.
+			}
+		}
+	}
+
+	// The object's lock should be acquired to complete the operation.
+	{
+		std::lock_guard<std::mutex> lock{lock_};
+
+		return 0 == authfunc_result ?
+				complete_successful_auth(client, std::move(client_key)) :
+				complete_denied_auth(client, std::move(client_key));
+	}
 }
 
 } /* namespace client_limits */
@@ -468,7 +525,8 @@ extern "C"
 authsubsys_auth_result_t
 authsubsys_authentificate_user(struct clientparam * client) {
 	return exception_catcher("authsubsys_authentificate_user", [&] {
-			return client_limits::do_authentificate_user(client);
+//FIXME: implement this!
+return authsubsys_auth_failed;
 		},
 		authsubsys_auth_failed);
 }
