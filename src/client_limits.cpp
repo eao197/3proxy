@@ -190,6 +190,119 @@ T exception_catcher(const char * where, Lambda && lambda, T on_exception_value) 
 template<typename T>
 constexpr T* nullptr_of() noexcept { return static_cast<T*>(nullptr); }
 
+//
+// Parts related to authsubsys
+//
+
+class authsubsys_t {
+	std::mutex lock_;
+
+	struct user_info_t {
+//FIXME: fill the struct with actual data.
+	};
+
+	using client_map_t = std::map<key_t, user_info_t>;
+
+	client_map_t clients_;
+
+	// For the case when already authentificated client is present in
+	// the cache.
+	// Note: this method should be called only when lock_ object
+	// is acquired.
+	authsubsys_auth_result_t
+	complete_successful_auth(
+		clientparam * client,
+		user_info_t & existing_info);
+
+	// For the case when info about successfuly authenticated client
+	// should be created in the cache.
+	// Note: this method should be called only when lock_ object
+	// is acquired.
+	authsubsys_auth_result_t
+	complete_successful_auth(
+		clientparam * client,
+		key_t client_key);
+
+	// For the case when info about denied client
+	// should be created in the cache.
+	// Note: this method should be called only when lock_ object
+	// is acquired.
+	authsubsys_auth_result_t
+	complete_denied_auth(
+		clientparam * client,
+		key_t client_key);
+
+public:
+	authsubsys_auth_result_t
+	authentificate_user(clientparam * client);
+};
+
+authsubsys_auth_result_t
+authsubsys_t::authentificate_user(clientparam * client) {
+	key_t client_key{make_client_id(client), make_service_id(client)};
+
+	const auto current_time = steady_clock::now();
+
+	// Try to find previous information about that client.
+	{
+		std::lock_guard<std::mutex> l{lock_};
+		auto it = clients_.find(client_key);
+		if(it != clients_.end()) {
+			if(it->second.expires_at_ >= current_time) {
+				// Information about that client already expired and should
+				// be removed.
+				clients_.erase(it);
+				it = clients_.end();
+			}
+			else if(is_denied_user(it->second))
+				return authsubsys_auth_denied;
+			else if(is_authentificated_user(it->second))
+				// Some information should be updated in 'client' object.
+				return complete_successful_auth(client, it->second);
+		}
+	}
+
+	// Actual authentication should be performed here.
+	int authfunc_result = 4;
+	//FIXME: there should be a loop over client->srv->authfuncs.
+
+	// The object's lock should be acquired to complete the operation.
+	{
+		std::lock_guard<std::mutex> lock{lock_};
+
+		return 0 == authfunc_result ?
+				complete_successfule_auth(client, std::move(key)) :
+				complete_denied_auth(client, std::move(key));
+	}
+}
+
+authsubsys_auth_result_t
+authsubsys_t::complete_successful_auth(
+		clientparam * client,
+		user_info_t & existing_info) {
+
+//FIXME: implement this!
+return authsubsys_auth_failed;
+}
+
+authsubsys_auth_result_t
+authsubsys_t::complete_successful_auth(
+		clientparam * client,
+		key_t client_key) {
+
+//FIXME: implement this!
+return authsubsys_auth_failed;
+}
+
+authsubsys_auth_result_t
+authsubsys_t::complete_denied_auth(
+		clientparam * client,
+		key_t client_key) {
+
+//FIXME: implement this!
+return authsubsys_auth_failed;
+}
+
 } /* namespace client_limits */
 
 using namespace client_limits;
@@ -349,5 +462,14 @@ client_limits_bandlim(
 	return CLIENT_BANDLIM_IN == direction ?
 			query_appropriate_bandlim_ptr(what->in_limit_) :
 			query_appropriate_bandlim_ptr(what->out_limit_);
+}
+
+extern "C"
+authsubsys_auth_result_t
+authsubsys_authentificate_user(struct clientparam * client) {
+	return exception_catcher("authsubsys_authentificate_user", [&] {
+			return client_limits::do_authentificate_user(client);
+		},
+		authsubsys_auth_failed);
 }
 
