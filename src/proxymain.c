@@ -7,6 +7,7 @@
 */
 
 #include "proxy.h"
+#include "client_limits.h"
 
 pthread_mutex_t log_mutex;
 

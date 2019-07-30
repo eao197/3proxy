@@ -271,9 +271,6 @@ client_limits_make(
 	clientparam * client,
 	const client_limits_params_t * limits) {
 
-//FIXME: test only!
-printf("### client: %p, in_rate: %u, out_rate: %u\n", client, limits->in_rate,limits->out_rate);
-
 	return exception_catcher("client_limits_make", [&] {
 			lock_guard_t lock{bandlim_mutex};
 
@@ -334,7 +331,6 @@ client_limits_release(
 			what->connections_.end());
 
 	if(what->connections_.empty()) {
-printf("*** client info erased: (%s, %s)\n", what->position_->first.client_id_.c_str(), what->position_->first.service_id_.c_str());
 		// This item is no more needed.
 		limits_map.erase(what->position_);
 	}

@@ -326,13 +326,9 @@ static void try_extract_bandlim_rates_from_vsa(
 		const uint8_t vendor_id = whole_vsa[6];
 		if(0x01 == vendor_id) {
 			param->personal_bandlimin_rate = uint32_from_bytes(&whole_vsa[8]);
-//FIXME: test only!
-printf("=== personal_bandlimin_rate: %u\n", param->personal_bandlimin_rate);
 		}
 		else if(0x02 == vendor_id) {
 			param->personal_bandlimout_rate = uint32_from_bytes(&whole_vsa[8]);
-//FIXME: test only!
-printf("=== personal_bandlimout_rate: %u\n", param->personal_bandlimout_rate);
 		}
 	}
 }

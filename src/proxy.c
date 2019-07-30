@@ -551,7 +551,7 @@ for(;;){
 #endif
 
  if(param->srv->needuser > 1 && !param->username) {RETURN(4);}
- if((res = (*param->srv->authfunc)(param))) {RETURN(res);}
+ if((res = (*param->srv->authfunc)(param))) { RETURN(res); }
 
  if(ftp && param->redirtype != R_HTTP){
 	SOCKET s;

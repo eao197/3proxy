@@ -658,9 +658,15 @@ static int try_set_client_bandlimin_if_needed(struct clientparam * param) {
 		};
 		param->client_limits = client_limits_make(param, &limits);
 		if(!param->client_limits) {
-//FIXME: standard logging via param->svr should be used!
-			fprintf(stderr, "alwaysauth: client_limits_make failed\n");
-			result = 10000;
+			if(!param->srv->silent)
+				(*param->srv->logfunc)(
+						param,"alwaysauth: client_limits_make failed\n");
+			// It's hard to detect that error code could be returned
+			// in such case. But it seems that alwaysauth returns just
+			// one error code and that code is 95.
+			// So return 95 in hope that all cleanup actions will be
+			// processed successfully.
+			result = 95;
 		}
 	}
 
@@ -840,7 +846,6 @@ int doauth(struct clientparam * param){
 					return res;
 
 			if(conf.authcachetype && authfuncs->authenticate && authfuncs->authenticate != cacheauth && param->username && (!(conf.authcachetype & AUTHCACHE_PASSWORD) || (!param->pwtype && param->password))){
-printf("### [doauth] try search in cache: %s, %s\n", param->username, param->password);
 				pthread_mutex_lock(&hash_mutex);
 				for(ac = authc; ac; ac = ac->next){
 					if((!(conf.authcachetype & AUTHCACHE_USERNAME)
