@@ -149,7 +149,8 @@ make_client_id(const clientparam * client) {
 
 std::string
 make_service_id(const clientparam * client) {
-	return "ext_ip=" + ip_to_string(client->sinsl) + ";";
+	return "ext_ip=" + ip_to_string(client->sinsl) + ";port=" +
+		std::to_string(ntohs(*SAPORT(&client->srv->intsa)));
 }
 
 using limits_map_t = std::map<key_t, client_limits_info_t>;
