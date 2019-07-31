@@ -210,17 +210,9 @@ class authsubsys_t {
 	};
 
 	struct authentificated_user_t {
-		// Optional username.
-		// Empty string if username is not used.
-		std::string username_;
-
-		// Optional password.
-		// Empty string if password is not used.
-		std::string password_;
-
 		// Optional band-limits.
-		unsigned personal_bandlimin_rate{0u};
-		unsigned personal_bandlimout_rate{0u};
+		unsigned personal_bandlimin_rate_{0u};
+		unsigned personal_bandlimout_rate_{0u};
 	};
 
 	struct banned_user_t {
@@ -305,9 +297,14 @@ authsubsys_auth_result_t
 authsubsys_t::complete_successful_auth(
 		clientparam * client,
 		user_info_t & existing_info) {
+printf("@@@ existing info will be used!\n");
+	const auto & i = get<authentificated_user_t>(existing_info.info_);
 
-//FIXME: implement this!
-return authsubsys_auth_failed;
+	// Values of personal band-limits must be taken to a new client.
+	client->personal_bandlimin_rate = i.personal_bandlimin_rate_;
+	client->personal_bandlimout_rate = i.personal_bandlimout_rate_;
+
+	return authsubsys_auth_successful;
 }
 
 authsubsys_auth_result_t
@@ -315,15 +312,11 @@ authsubsys_t::complete_successful_auth(
 		const steady_clock::time_point now,
 		clientparam * client,
 		key_t client_key) {
+printf("@@@ new info in cache will be created!\n");
 	authentificated_user_t auth_info;
 
-	if(client->username)
-		auth_info.username_ = reinterpret_cast<char *>(client->username);
-	if(client->password)
-		auth_info.password_ = reinterpret_cast<char *>(client->password);
-
-	auth_info.personal_bandlimin_rate = client->personal_bandlimin_rate;
-	auth_info.personal_bandlimout_rate = client->personal_bandlimout_rate;
+	auth_info.personal_bandlimin_rate_ = client->personal_bandlimin_rate;
+	auth_info.personal_bandlimout_rate_ = client->personal_bandlimout_rate;
 
 	const auto expires_at = now + std::chrono::minutes{1};
 	const auto ins_result = clients_.emplace(
@@ -333,7 +326,7 @@ authsubsys_t::complete_successful_auth(
 		// The value wasn't inserted in the map. Old item should be modified.
 		user_info_t & old_info = ins_result.first->second;
 		old_info.expires_at_ = expires_at;
-		old_info.info_ = std::move(auth_info);
+		old_info.info_ = auth_info;
 	}
 
 	return authsubsys_auth_successful;
@@ -359,11 +352,13 @@ authsubsys_t::authentificate_user(clientparam * client) {
 		std::lock_guard<std::mutex> l{lock_};
 		auto it = clients_.find(client_key);
 		if(it != clients_.end()) {
-			if(it->second.expires_at_ >= current_time) {
+printf("@@@ info found in cache!\n");
+			if(it->second.expires_at_ <= current_time) {
 				// Information about that client already expired and should
 				// be removed.
 				clients_.erase(it);
 				it = clients_.end();
+printf("@@@ info expired!\n");
 			}
 			else if(is_banned_user(it->second))
 				return authsubsys_auth_denied;
@@ -398,6 +393,11 @@ authsubsys_t::authentificate_user(clientparam * client) {
 				complete_denied_auth(client, std::move(client_key));
 	}
 }
+
+//
+// An instance of authsubsys.
+//
+authsubsys_t authsubsys_instance;
 
 } /* namespace client_limits */
 
@@ -564,8 +564,7 @@ extern "C"
 authsubsys_auth_result_t
 authsubsys_authentificate_user(struct clientparam * client) {
 	return exception_catcher("authsubsys_authentificate_user", [&] {
-//FIXME: implement this!
-return authsubsys_auth_failed;
+			return authsubsys_instance.authentificate_user(client);
 		},
 		authsubsys_auth_failed);
 }
