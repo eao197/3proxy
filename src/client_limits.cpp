@@ -221,7 +221,7 @@ class authsubsys_t {
 	};
 
 	struct banned_user_t {
-//FIXME: fill with the actual data.
+		// NOTE. There is no actual data for banned user.
 	};
 
 	using user_info_variant_t = variant<
@@ -250,11 +250,11 @@ class authsubsys_t {
 	using client_map_t = std::map<key_t, user_info_t>;
 
 //FIXME: those attributes should receive their values via some method-setter.
-	unsigned max_failed_attempts_{3};
-	std::chrono::seconds allowed_time_window_{30};
-	std::chrono::seconds ban_period_{120};
+	unsigned max_failed_attempts_{1};
+	std::chrono::seconds allowed_time_window_{0};
+	std::chrono::seconds ban_period_{2};
 
-	std::chrono::seconds success_expiration_time_{60};
+	std::chrono::seconds success_expiration_time_{0};
 
 	client_map_t clients_;
 
