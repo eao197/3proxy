@@ -155,10 +155,27 @@ make_client_id(const clientparam * client) {
 		return ip_to_string(client->sincr);
 }
 
+#ifndef NOIPV6
+const sockaddr_in6 &
+get_service_ext_address_reference(const clientparam * client) {
+	if(AF_INET == *SAFAMILY(&client->srv->extsa))
+		return client->srv->extsa;
+	else
+		return client->srv->extsa6;
+}
+#else
+const sockaddr_in &
+get_service_ext_address_reference(const clientparam * client) {
+	return client->srv->extsa;
+}
+#endif
+
 std::string
 make_service_id(const clientparam * client) {
-	return "ext_ip=" + ip_to_string(client->sinsl) + ";port=" +
-		std::to_string(ntohs(*SAPORT(&client->srv->intsa)));
+	return "ext_ip="
+		+ ip_to_string(get_service_ext_address_reference(client))
+		+ ";port="
+		+ std::to_string(ntohs(*SAPORT(&client->srv->intsa)));
 }
 
 using limits_map_t = std::map<key_t, client_limits_info_t>;
@@ -441,6 +458,8 @@ printf("@@@ item to old: %s, %s\n", it->first.client_id_.c_str(), it->first.serv
 authsubsys_auth_result_t
 authsubsys_t::authentificate_user(clientparam * client) {
 	key_t client_key{make_client_id(client), make_service_id(client)};
+
+printf("@@@ ### client key: %s, %s\n", client_key.client_id_.c_str(), client_key.service_id_.c_str());
 
 	const auto current_time = steady_clock::now();
 
