@@ -206,7 +206,12 @@ class authsubsys_t {
 	std::mutex lock_;
 
 	struct not_authentificated_user_t {
-//FIXME: fill with the actual data.
+		std::vector<steady_clock::time_point> failed_attemps_timestamps_;
+
+		not_authentificated_user_t(
+				unsigned max_failed_attempts) {
+			failed_attemps_timestamps_.reserve(max_failed_attempts);
+		}
 	};
 
 	struct authentificated_user_t {
@@ -232,15 +237,24 @@ class authsubsys_t {
 		user_info_variant_t info_;
 
 		user_info_t() = default;
+
+		template<typename Auth_Info>
 		user_info_t(
 			steady_clock::time_point expires_at,
-			authentificated_user_t auth_info)
+			Auth_Info auth_info)
 			: expires_at_(expires_at)
 			, info_(std::move(auth_info))
 		{}
 	};
 
 	using client_map_t = std::map<key_t, user_info_t>;
+
+//FIXME: those attributes should receive their values via some method-setter.
+	unsigned max_failed_attempts_{3};
+	std::chrono::seconds allowed_time_window_{30};
+	std::chrono::seconds ban_period_{120};
+
+	std::chrono::seconds success_expiration_time_{60};
 
 	client_map_t clients_;
 
@@ -275,8 +289,12 @@ class authsubsys_t {
 	// is acquired.
 	authsubsys_auth_result_t
 	complete_denied_auth(
+		const steady_clock::time_point now,
 		clientparam * client,
 		key_t client_key);
+
+	steady_clock::time_point
+	calc_expires_at(const steady_clock::time_point now) const noexcept;
 
 public:
 	authsubsys_auth_result_t
@@ -318,13 +336,16 @@ printf("@@@ new info in cache will be created!\n");
 	auth_info.personal_bandlimin_rate_ = client->personal_bandlimin_rate;
 	auth_info.personal_bandlimout_rate_ = client->personal_bandlimout_rate;
 
-	const auto expires_at = now + std::chrono::minutes{1};
+	const auto expires_at = now + success_expiration_time_;
 	const auto ins_result = clients_.emplace(
 			std::move(client_key),
 			user_info_t{expires_at, auth_info});
 	if(!ins_result.second) {
 		// The value wasn't inserted in the map. Old item should be modified.
 		user_info_t & old_info = ins_result.first->second;
+		// This is the expiration time of a new 'successful' info.
+		// The previous info was 'not_authentificated_user_t' and its
+		// expiration time is no more valid.
 		old_info.expires_at_ = expires_at;
 		old_info.info_ = auth_info;
 	}
@@ -334,11 +355,51 @@ printf("@@@ new info in cache will be created!\n");
 
 authsubsys_auth_result_t
 authsubsys_t::complete_denied_auth(
+		const steady_clock::time_point now,
 		clientparam * client,
 		key_t client_key) {
+printf("@@@ handle failed auth!\n");
+	auto it = clients_.find(client_key);
+	if(it == clients_.end()) {
+printf("@@@ [handle failed] new item created\n");
+		// A new info should be created.
+		const auto ins_result = clients_.emplace(
+				std::move(client_key),
+				user_info_t{
+						now + allowed_time_window_,
+						not_authentificated_user_t{max_failed_attempts_}});
+		it = ins_result.first;
+	}
 
-//FIXME: implement this!
-return authsubsys_auth_failed;
+	auto & user_info = it->second;
+	auto * auth_info = &(get<not_authentificated_user_t>(user_info.info_));
+
+	auth_info->failed_attemps_timestamps_.push_back(now);
+	if(max_failed_attempts_ == auth_info->failed_attemps_timestamps_.size()) {
+		// Is this the case for a ban?
+		if(auth_info->failed_attemps_timestamps_.front() + allowed_time_window_
+				>= now) {
+printf("@@@ [handle failed] user banned\n");
+			// User should be banned!
+			user_info.expires_at_ = now + ban_period_;
+			user_info.info_ = banned_user_t{};
+		}
+		else {
+printf("@@@ [handle failed] user not banned yet\n");
+			// The first item in failed_attemps_timestamps_ is no more needed.
+			auth_info->failed_attemps_timestamps_.erase(
+					auth_info->failed_attemps_timestamps_.begin());
+			// For the case when max_failed_attempts_ == 1.
+			if(auth_info->failed_attemps_timestamps_.empty())
+				user_info.expires_at_ = now + allowed_time_window_;
+			else
+				user_info.expires_at_ =
+						auth_info->failed_attemps_timestamps_.front() +
+						allowed_time_window_;
+		}
+	}
+
+	return authsubsys_auth_denied;
 }
 
 authsubsys_auth_result_t
@@ -357,14 +418,17 @@ printf("@@@ info found in cache!\n");
 				// Information about that client already expired and should
 				// be removed.
 				clients_.erase(it);
-				it = clients_.end();
 printf("@@@ info expired!\n");
 			}
-			else if(is_banned_user(it->second))
+			else if(is_banned_user(it->second)) {
+printf("@@@ user banned!\n");
 				return authsubsys_auth_denied;
-			else if(is_authentificated_user(it->second))
+			}
+			else if(is_authentificated_user(it->second)) {
+printf("@@@ user already authentificated!\n");
 				// Some information should be updated in 'client' object.
 				return complete_successful_auth(client, it->second);
+			}
 		}
 	}
 
@@ -389,8 +453,13 @@ printf("@@@ info expired!\n");
 		std::lock_guard<std::mutex> lock{lock_};
 
 		return 0 == authfunc_result ?
-				complete_successful_auth(current_time, client, std::move(client_key)) :
-				complete_denied_auth(client, std::move(client_key));
+				complete_successful_auth(
+						current_time, client, std::move(client_key)) :
+				//FIXME: value of authfunc_result should be analyzed.
+				//User should be banned only if auth-server returns
+				//negative result.
+				complete_denied_auth(
+						current_time, client, std::move(client_key));
 	}
 }
 
