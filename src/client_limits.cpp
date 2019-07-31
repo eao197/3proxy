@@ -158,6 +158,10 @@ make_client_id(const clientparam * client) {
 #ifndef NOIPV6
 const sockaddr_in6 &
 get_service_ext_address_reference(const clientparam * client) {
+	// It seems that in the case of IPv4 address the value of extsa6
+	// will be null. In that case extsa is used.
+	// There is no any descriptions in code found but it was proved
+	// by some testing.
 	if(SAISNULL(&client->srv->extsa6))
 		return client->srv->extsa;
 	else
@@ -351,7 +355,6 @@ authsubsys_auth_result_t
 authsubsys_t::complete_successful_auth(
 		clientparam * client,
 		user_info_t & existing_info) {
-printf("@@@ existing info will be used!\n");
 	const auto & i = get<authentificated_user_t>(existing_info.info_);
 
 	// Values of personal band-limits must be taken to a new client.
@@ -366,7 +369,6 @@ authsubsys_t::complete_successful_auth(
 		const steady_clock::time_point now,
 		clientparam * client,
 		key_t client_key) {
-printf("@@@ new info in cache will be created!\n");
 	authentificated_user_t auth_info;
 
 	auth_info.personal_bandlimin_rate_ = client->personal_bandlimin_rate;
@@ -394,10 +396,8 @@ authsubsys_t::complete_denied_auth(
 		const steady_clock::time_point now,
 		clientparam * client,
 		key_t client_key) {
-printf("@@@ handle failed auth!\n");
 	auto it = clients_.find(client_key);
 	if(it == clients_.end()) {
-printf("@@@ [handle failed] new item created\n");
 		// A new info should be created.
 		const auto ins_result = clients_.emplace(
 				std::move(client_key),
@@ -415,13 +415,11 @@ printf("@@@ [handle failed] new item created\n");
 		// Is this the case for a ban?
 		if(auth_info->failed_attemps_timestamps_.front() + allowed_time_window_
 				>= now) {
-printf("@@@ [handle failed] user banned\n");
 			// User should be banned!
 			user_info.expires_at_ = now + ban_period_;
 			user_info.info_ = banned_user_t{};
 		}
 		else {
-printf("@@@ [handle failed] user not banned yet\n");
 			// The first item in failed_attemps_timestamps_ is no more needed.
 			auth_info->failed_attemps_timestamps_.erase(
 					auth_info->failed_attemps_timestamps_.begin());
@@ -431,8 +429,6 @@ printf("@@@ [handle failed] user not banned yet\n");
 	if(!is_banned_user(user_info)) {
 		// Expiration time should be updated.
 		user_info.expires_at_ = now + allowed_time_window_;
-printf("@@@ [handle failed] new expires_at_: %ld\n",
-std::chrono::duration_cast<std::chrono::seconds>(user_info.expires_at_.time_since_epoch()).count());
 	}
 
 	return authsubsys_auth_denied;
@@ -447,7 +443,6 @@ authsubsys_t::clean_cache_if_necessary(
 	auto it = clients_.begin();
 	while(it != clients_.end()) {
 		if(it->second.expires_at_ <= now) {
-printf("@@@ item to old: %s, %s\n", it->first.client_id_.c_str(), it->first.service_id_.c_str());
 			it = clients_.erase(it);
 		}
 		else
@@ -459,8 +454,6 @@ authsubsys_auth_result_t
 authsubsys_t::authentificate_user(clientparam * client) {
 	key_t client_key{make_client_id(client), make_service_id(client)};
 
-printf("@@@ ### client key: %s, %s\n", client_key.client_id_.c_str(), client_key.service_id_.c_str());
-
 	const auto current_time = steady_clock::now();
 
 	// Try to find previous information about that client.
@@ -470,19 +463,15 @@ printf("@@@ ### client key: %s, %s\n", client_key.client_id_.c_str(), client_key
 
 		auto it = clients_.find(client_key);
 		if(it != clients_.end()) {
-printf("@@@ info found in cache!\n");
 			if(it->second.expires_at_ <= current_time) {
 				// Information about that client already expired and should
 				// be removed.
 				clients_.erase(it);
-printf("@@@ info expired!\n");
 			}
 			else if(is_banned_user(it->second)) {
-printf("@@@ user banned!\n");
 				return authsubsys_auth_denied;
 			}
 			else if(is_authentificated_user(it->second)) {
-printf("@@@ user already authentificated!\n");
 				// Some information should be updated in 'client' object.
 				return complete_successful_auth(client, it->second);
 			}
