@@ -147,10 +147,27 @@ make_client_id(const clientparam * client) {
 		return ip_to_string(client->sincr);
 }
 
+#ifndef NOIPV6
+const sockaddr_in6 &
+get_service_ext_address_reference(const clientparam * client) {
+	if(SAISNULL(&client->srv->extsa6))
+		return client->srv->extsa;
+	else
+		return client->srv->extsa6;
+}
+#else
+const sockaddr_in &
+get_service_ext_address_reference(const clientparam * client) {
+	return client->srv->extsa;
+}
+#endif
+
 std::string
 make_service_id(const clientparam * client) {
-	return "ext_ip=" + ip_to_string(client->sinsl) + ";port=" +
-		std::to_string(ntohs(*SAPORT(&client->srv->intsa)));
+	return "ext_ip="
+		+ ip_to_string(get_service_ext_address_reference(client))
+		+ ";port="
+		+ std::to_string(ntohs(*SAPORT(&client->srv->intsa)));
 }
 
 using limits_map_t = std::map<key_t, client_limits_info_t>;
