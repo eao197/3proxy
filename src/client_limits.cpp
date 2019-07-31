@@ -249,14 +249,23 @@ class authsubsys_t {
 
 	using client_map_t = std::map<key_t, user_info_t>;
 
-//FIXME: those attributes should receive their values via some method-setter.
+	// How many failed attempts user can do before he/she will be banned.
 	unsigned max_failed_attempts_{1};
+	// A time-window inside that failed attempts are counted.
 	std::chrono::seconds allowed_time_window_{0};
+	// Ban time interval.
 	std::chrono::seconds ban_period_{2};
 
+	// How much time the info about successful authentification should be
+	// stored and used in cache.
 	std::chrono::seconds success_expiration_time_{0};
 
 	client_map_t clients_;
+
+	// Cache cleanup interval.
+	const std::chrono::seconds cleanup_period_{60};
+	// Last time when cache was cleaned.
+	steady_clock::time_point last_cleanup_at_{steady_clock::now()};
 
 	static bool
 	is_banned_user(const user_info_t & info) noexcept;
@@ -293,8 +302,11 @@ class authsubsys_t {
 		clientparam * client,
 		key_t client_key);
 
-	steady_clock::time_point
-	calc_expires_at(const steady_clock::time_point now) const noexcept;
+	// Note: this method should be called only when lock_ object
+	// is acquired.
+	void
+	clean_cache_if_necessary(
+		const steady_clock::time_point now) noexcept;
 
 public:
 	authsubsys_auth_result_t
@@ -409,6 +421,23 @@ std::chrono::duration_cast<std::chrono::seconds>(user_info.expires_at_.time_sinc
 	return authsubsys_auth_denied;
 }
 
+void
+authsubsys_t::clean_cache_if_necessary(
+		const steady_clock::time_point now) noexcept {
+	if(last_cleanup_at_ + cleanup_period_ > now)
+		return; // Nothing to do.
+
+	auto it = clients_.begin();
+	while(it != clients_.end()) {
+		if(it->second.expires_at_ <= now) {
+printf("@@@ item to old: %s, %s\n", it->first.client_id_.c_str(), it->first.service_id_.c_str());
+			it = clients_.erase(it);
+		}
+		else
+			++it;
+	}
+}
+
 authsubsys_auth_result_t
 authsubsys_t::authentificate_user(clientparam * client) {
 	key_t client_key{make_client_id(client), make_service_id(client)};
@@ -418,6 +447,8 @@ authsubsys_t::authentificate_user(clientparam * client) {
 	// Try to find previous information about that client.
 	{
 		std::lock_guard<std::mutex> l{lock_};
+		clean_cache_if_necessary(current_time);
+
 		auto it = clients_.find(client_key);
 		if(it != clients_.end()) {
 printf("@@@ info found in cache!\n");
