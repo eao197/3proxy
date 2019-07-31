@@ -158,7 +158,7 @@ make_client_id(const clientparam * client) {
 #ifndef NOIPV6
 const sockaddr_in6 &
 get_service_ext_address_reference(const clientparam * client) {
-	if(AF_INET == *SAFAMILY(&client->srv->extsa))
+	if(SAISNULL(&client->srv->extsa6))
 		return client->srv->extsa;
 	else
 		return client->srv->extsa6;
