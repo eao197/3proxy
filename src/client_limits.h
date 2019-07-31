@@ -36,5 +36,27 @@ client_limits_bandlim(
 	struct client_limits_info_t * what,
 	CLIENT_BANDLIM_DIR direction);
 
+//FIXME: should the following stuff be moved to a different header file?
+typedef enum {
+	// User successfully authentificated.
+	authsubsys_auth_successful,
+	// User denied by authentification entity.
+	authsubsys_auth_denied,
+	// Authentification operation failed by some reason.
+	// We can tell is this user allowed or denied.
+	authsubsys_auth_failed
+} authsubsys_auth_result_t;
+
+authsubsys_auth_result_t
+authsubsys_authentificate_user(
+	struct clientparam * client);
+
+void
+authsubsys_setup_times(
+	unsigned success_expiration_time_sec,
+	unsigned allowed_time_window_sec,
+	unsigned max_failed_attempts,
+	unsigned ban_period_sec);
+
 #endif
 

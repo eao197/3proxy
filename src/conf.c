@@ -7,6 +7,8 @@
 */
 
 #include "proxy.h"
+#include "client_limits.h"
+
 #ifndef _WIN32
 #include <sys/resource.h>
 #include <pwd.h>
@@ -1486,6 +1488,43 @@ static int h_client_bandlimout(int argc, unsigned char **argv){
 	return 0;
 }
 
+static int h_auth_times(int argc, unsigned char **argv){
+	unsigned success_expiration_time;
+	if(1 != sscanf(argv[1], "%u", &success_expiration_time)) {
+		fprintf(stderr, "unable to parse success-expiration-time: %s\n", argv[1]);
+		return 2;
+	}
+
+	unsigned allowed_time_window, max_failed_attempts;
+	if(2 != sscanf(argv[2], "%u/%u", &allowed_time_window, &max_failed_attempts)) {
+		fprintf(stderr, "unable to parse allowed-time-window/max-failed-attempts: %s\n", argv[2]);
+		return 3;
+	}
+	else if(0u == max_failed_attempts) {
+		fprintf(stderr, "max-failed-attempts can't be 0\n");
+		return 3;
+	}
+
+	unsigned ban_period;
+
+	if(1 != sscanf(argv[3], "%u", &ban_period)) {
+		fprintf(stderr, "unable to parse ban-period: %s\n", argv[3]);
+		return 4;
+	}
+	else if(0u == ban_period) {
+		fprintf(stderr, "ban-period can't be 0\n");
+		return 4;
+	}
+
+	authsubsys_setup_times(
+			success_expiration_time,
+			allowed_time_window,
+			max_failed_attempts,
+			ban_period);
+
+	return 0;
+}
+
 struct commands specificcommands[]={
 #ifndef _WIN32
 	{specificcommands+1, "setuid", h_setuid, 2, 2},
@@ -1558,8 +1597,9 @@ struct commands commandhandlers[]={
 	{commandhandlers+60, "noforce", h_noforce, 1, 1},
 	{commandhandlers+61, "client_bandlimin", h_client_bandlimin, 2, 2},
 	{commandhandlers+62, "client_bandlimout", h_client_bandlimout, 2, 2},
+	{commandhandlers+63, "auth_times", h_auth_times, 4, 4},
 #ifndef NORADIUS
-	{commandhandlers+63, "radius", h_radius, 3, 0},
+	{commandhandlers+64, "radius", h_radius, 3, 0},
 #endif
 	{specificcommands, 	 "", h_noop, 1, 0}
 };

@@ -832,6 +832,16 @@ int cacheauth(struct clientparam * param){
 }
 
 int doauth(struct clientparam * param){
+	const authsubsys_auth_result_t result = authsubsys_authentificate_user(param);
+	if(authsubsys_auth_successful == result)
+		return alwaysauth(param);
+	else
+		// Value '4' was used in old 3proxy code for cases of failed
+		// authenifications.
+		return 4;
+
+//FIXME: remove after debugging.
+#if 0
 	int res = 0;
 	struct auth *authfuncs;
 	struct authcache *ac;
@@ -922,6 +932,7 @@ int doauth(struct clientparam * param){
 	}
 
 	return ret;
+#endif
 }
 
 

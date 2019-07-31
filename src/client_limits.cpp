@@ -8,13 +8,21 @@ extern "C" {
 
 }
 
+#include "variant.hpp"
+
 #include <map>
 #include <string>
 #include <tuple>
 #include <vector>
 #include <algorithm>
+#include <chrono>
+#include <mutex>
 
 #include <cstdio>
+
+using namespace nonstd;
+
+using steady_clock = std::chrono::steady_clock;
 
 //NOTE: the following code borrowed from SObjectizer project
 // https://bitbucket.org/sobjectizerteam/sobjectizer
@@ -150,6 +158,10 @@ make_client_id(const clientparam * client) {
 #ifndef NOIPV6
 const sockaddr_in6 &
 get_service_ext_address_reference(const clientparam * client) {
+	// It seems that in the case of IPv4 address the value of extsa6
+	// will be null. In that case extsa is used.
+	// There is no any descriptions in code found but it was proved
+	// by some testing.
 	if(SAISNULL(&client->srv->extsa6))
 		return client->srv->extsa;
 	else
@@ -206,6 +218,313 @@ T exception_catcher(const char * where, Lambda && lambda, T on_exception_value) 
 
 template<typename T>
 constexpr T* nullptr_of() noexcept { return static_cast<T*>(nullptr); }
+
+//
+// Parts related to authsubsys
+//
+
+class authsubsys_t {
+	std::mutex lock_;
+
+	struct not_authentificated_user_t {
+		std::vector<steady_clock::time_point> failed_attemps_timestamps_;
+
+		not_authentificated_user_t(
+				unsigned max_failed_attempts) {
+			failed_attemps_timestamps_.reserve(max_failed_attempts);
+		}
+	};
+
+	struct authentificated_user_t {
+		// Optional band-limits.
+		unsigned personal_bandlimin_rate_{0u};
+		unsigned personal_bandlimout_rate_{0u};
+	};
+
+	struct banned_user_t {
+		// NOTE. There is no actual data for banned user.
+	};
+
+	using user_info_variant_t = variant<
+			not_authentificated_user_t,
+			authentificated_user_t,
+			banned_user_t>;
+
+	struct user_info_t {
+		// A time point at that this information should be invalidated.
+		steady_clock::time_point expires_at_;
+
+		// An information about the user.
+		user_info_variant_t info_;
+
+		user_info_t() = default;
+
+		template<typename Auth_Info>
+		user_info_t(
+			steady_clock::time_point expires_at,
+			Auth_Info auth_info)
+			: expires_at_(expires_at)
+			, info_(std::move(auth_info))
+		{}
+	};
+
+	using client_map_t = std::map<key_t, user_info_t>;
+
+	// How many failed attempts user can do before he/she will be banned.
+	unsigned max_failed_attempts_{1};
+	// A time-window inside that failed attempts are counted.
+	std::chrono::seconds allowed_time_window_{0};
+	// Ban time interval.
+	std::chrono::seconds ban_period_{2};
+
+	// How much time the info about successful authentification should be
+	// stored and used in cache.
+	std::chrono::seconds success_expiration_time_{0};
+
+	client_map_t clients_;
+
+	// Cache cleanup interval.
+	const std::chrono::seconds cleanup_period_{60};
+	// Last time when cache was cleaned.
+	steady_clock::time_point last_cleanup_at_{steady_clock::now()};
+
+	static bool
+	is_banned_user(const user_info_t & info) noexcept;
+
+	static bool
+	is_authentificated_user(const user_info_t & info) noexcept;
+
+	// For the case when already authentificated client is present in
+	// the cache.
+	// Note: this method should be called only when lock_ object
+	// is acquired.
+	authsubsys_auth_result_t
+	complete_successful_auth(
+		clientparam * client,
+		user_info_t & existing_info);
+
+	// For the case when info about successfuly authenticated client
+	// should be created in the cache.
+	// Note: this method should be called only when lock_ object
+	// is acquired.
+	authsubsys_auth_result_t
+	complete_successful_auth(
+		const steady_clock::time_point now,
+		clientparam * client,
+		key_t client_key);
+
+	// For the case when info about denied client
+	// should be created in the cache.
+	// Note: this method should be called only when lock_ object
+	// is acquired.
+	authsubsys_auth_result_t
+	complete_denied_auth(
+		const steady_clock::time_point now,
+		clientparam * client,
+		key_t client_key);
+
+	// Note: this method should be called only when lock_ object
+	// is acquired.
+	void
+	clean_cache_if_necessary(
+		const steady_clock::time_point now) noexcept;
+
+public:
+	authsubsys_auth_result_t
+	authentificate_user(clientparam * client);
+
+	void
+	setup_times(
+		std::chrono::seconds success_expiration_time,
+		std::chrono::seconds allowed_time_window,
+		unsigned max_failed_attempts,
+		std::chrono::seconds ban_period) noexcept;
+};
+
+bool
+authsubsys_t::is_banned_user(const user_info_t & info) noexcept {
+	return 2u == info.info_.index();
+}
+
+bool
+authsubsys_t::is_authentificated_user(const user_info_t & info) noexcept {
+	return 1u == info.info_.index();
+}
+
+authsubsys_auth_result_t
+authsubsys_t::complete_successful_auth(
+		clientparam * client,
+		user_info_t & existing_info) {
+	const auto & i = get<authentificated_user_t>(existing_info.info_);
+
+	// Values of personal band-limits must be taken to a new client.
+	client->personal_bandlimin_rate = i.personal_bandlimin_rate_;
+	client->personal_bandlimout_rate = i.personal_bandlimout_rate_;
+
+	return authsubsys_auth_successful;
+}
+
+authsubsys_auth_result_t
+authsubsys_t::complete_successful_auth(
+		const steady_clock::time_point now,
+		clientparam * client,
+		key_t client_key) {
+	authentificated_user_t auth_info;
+
+	auth_info.personal_bandlimin_rate_ = client->personal_bandlimin_rate;
+	auth_info.personal_bandlimout_rate_ = client->personal_bandlimout_rate;
+
+	const auto expires_at = now + success_expiration_time_;
+	const auto ins_result = clients_.emplace(
+			std::move(client_key),
+			user_info_t{expires_at, auth_info});
+	if(!ins_result.second) {
+		// The value wasn't inserted in the map. Old item should be modified.
+		user_info_t & old_info = ins_result.first->second;
+		// This is the expiration time of a new 'successful' info.
+		// The previous info was 'not_authentificated_user_t' and its
+		// expiration time is no more valid.
+		old_info.expires_at_ = expires_at;
+		old_info.info_ = auth_info;
+	}
+
+	return authsubsys_auth_successful;
+}
+
+authsubsys_auth_result_t
+authsubsys_t::complete_denied_auth(
+		const steady_clock::time_point now,
+		clientparam * client,
+		key_t client_key) {
+	auto it = clients_.find(client_key);
+	if(it == clients_.end()) {
+		// A new info should be created.
+		const auto ins_result = clients_.emplace(
+				std::move(client_key),
+				user_info_t{
+						now + allowed_time_window_,
+						not_authentificated_user_t{max_failed_attempts_}});
+		it = ins_result.first;
+	}
+
+	auto & user_info = it->second;
+	auto * auth_info = &(get<not_authentificated_user_t>(user_info.info_));
+
+	auth_info->failed_attemps_timestamps_.push_back(now);
+	if(max_failed_attempts_ == auth_info->failed_attemps_timestamps_.size()) {
+		// Is this the case for a ban?
+		if(auth_info->failed_attemps_timestamps_.front() + allowed_time_window_
+				>= now) {
+			// User should be banned!
+			user_info.expires_at_ = now + ban_period_;
+			user_info.info_ = banned_user_t{};
+		}
+		else {
+			// The first item in failed_attemps_timestamps_ is no more needed.
+			auth_info->failed_attemps_timestamps_.erase(
+					auth_info->failed_attemps_timestamps_.begin());
+		}
+	}
+
+	if(!is_banned_user(user_info)) {
+		// Expiration time should be updated.
+		user_info.expires_at_ = now + allowed_time_window_;
+	}
+
+	return authsubsys_auth_denied;
+}
+
+void
+authsubsys_t::clean_cache_if_necessary(
+		const steady_clock::time_point now) noexcept {
+	if(last_cleanup_at_ + cleanup_period_ > now)
+		return; // Nothing to do.
+
+	auto it = clients_.begin();
+	while(it != clients_.end()) {
+		if(it->second.expires_at_ <= now) {
+			it = clients_.erase(it);
+		}
+		else
+			++it;
+	}
+}
+
+authsubsys_auth_result_t
+authsubsys_t::authentificate_user(clientparam * client) {
+	key_t client_key{make_client_id(client), make_service_id(client)};
+
+	const auto current_time = steady_clock::now();
+
+	// Try to find previous information about that client.
+	{
+		std::lock_guard<std::mutex> l{lock_};
+		clean_cache_if_necessary(current_time);
+
+		auto it = clients_.find(client_key);
+		if(it != clients_.end()) {
+			if(it->second.expires_at_ <= current_time) {
+				// Information about that client already expired and should
+				// be removed.
+				clients_.erase(it);
+			}
+			else if(is_banned_user(it->second)) {
+				return authsubsys_auth_denied;
+			}
+			else if(is_authentificated_user(it->second)) {
+				// Some information should be updated in 'client' object.
+				return complete_successful_auth(client, it->second);
+			}
+		}
+	}
+
+	// Actual authentication should be performed here.
+	int authfunc_result = 4;
+	// Iterate over defined authmethods for the service.
+	for(auth * authfuncs=client->srv->authfuncs;
+			authfuncs;
+			authfuncs = authfuncs->next) {
+		authfunc_result = authfuncs->authenticate ?
+				(*authfuncs->authenticate)(client) : 0;
+		if(!authfunc_result) {
+			if(authfuncs->authorize &&
+					(authfunc_result = (*authfuncs->authorize)(client))) {
+				break; // There is no sense to go to the next authfunc.
+			}
+		}
+	}
+
+	// The object's lock should be acquired to complete the operation.
+	{
+		std::lock_guard<std::mutex> lock{lock_};
+
+		return 0 == authfunc_result ?
+				complete_successful_auth(
+						current_time, client, std::move(client_key)) :
+				//FIXME: value of authfunc_result should be analyzed.
+				//User should be banned only if auth-server returns
+				//negative result.
+				complete_denied_auth(
+						current_time, client, std::move(client_key));
+	}
+}
+
+void
+authsubsys_t::setup_times(
+		std::chrono::seconds success_expiration_time,
+		std::chrono::seconds allowed_time_window,
+		unsigned max_failed_attempts,
+		std::chrono::seconds ban_period) noexcept {
+	success_expiration_time_ = success_expiration_time;
+	allowed_time_window_ = allowed_time_window;
+	max_failed_attempts_ = max_failed_attempts;
+	ban_period_ = ban_period;
+}
+
+//
+// An instance of authsubsys.
+//
+authsubsys_t authsubsys_instance;
 
 } /* namespace client_limits */
 
@@ -368,3 +687,25 @@ client_limits_bandlim(
 			query_appropriate_bandlim_ptr(what->out_limit_);
 }
 
+extern "C"
+authsubsys_auth_result_t
+authsubsys_authentificate_user(struct clientparam * client) {
+	return exception_catcher("authsubsys_authentificate_user", [&] {
+			return authsubsys_instance.authentificate_user(client);
+		},
+		authsubsys_auth_failed);
+}
+
+extern "C"
+void
+authsubsys_setup_times(
+		unsigned success_expiration_time_sec,
+		unsigned allowed_time_window_sec,
+		unsigned max_failed_attempts,
+		unsigned ban_period_sec) {
+	authsubsys_instance.setup_times(
+			std::chrono::seconds{success_expiration_time_sec},
+			std::chrono::seconds{allowed_time_window_sec},
+			max_failed_attempts,
+			std::chrono::seconds{ban_period_sec});
+}
