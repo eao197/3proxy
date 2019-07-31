@@ -299,6 +299,13 @@ class authsubsys_t {
 public:
 	authsubsys_auth_result_t
 	authentificate_user(clientparam * client);
+
+	void
+	setup_times(
+		std::chrono::seconds success_expiration_time,
+		std::chrono::seconds allowed_time_window,
+		unsigned max_failed_attempts,
+		std::chrono::seconds ban_period) noexcept;
 };
 
 bool
@@ -389,14 +396,14 @@ printf("@@@ [handle failed] user not banned yet\n");
 			// The first item in failed_attemps_timestamps_ is no more needed.
 			auth_info->failed_attemps_timestamps_.erase(
 					auth_info->failed_attemps_timestamps_.begin());
-			// For the case when max_failed_attempts_ == 1.
-			if(auth_info->failed_attemps_timestamps_.empty())
-				user_info.expires_at_ = now + allowed_time_window_;
-			else
-				user_info.expires_at_ =
-						auth_info->failed_attemps_timestamps_.front() +
-						allowed_time_window_;
 		}
+	}
+
+	if(!is_banned_user(user_info)) {
+		// Expiration time should be updated.
+		user_info.expires_at_ = now + allowed_time_window_;
+printf("@@@ [handle failed] new expires_at_: %ld\n",
+std::chrono::duration_cast<std::chrono::seconds>(user_info.expires_at_.time_since_epoch()).count());
 	}
 
 	return authsubsys_auth_denied;
@@ -461,6 +468,18 @@ printf("@@@ user already authentificated!\n");
 				complete_denied_auth(
 						current_time, client, std::move(client_key));
 	}
+}
+
+void
+authsubsys_t::setup_times(
+		std::chrono::seconds success_expiration_time,
+		std::chrono::seconds allowed_time_window,
+		unsigned max_failed_attempts,
+		std::chrono::seconds ban_period) noexcept {
+	success_expiration_time_ = success_expiration_time;
+	allowed_time_window_ = allowed_time_window;
+	max_failed_attempts_ = max_failed_attempts;
+	ban_period_ = ban_period;
 }
 
 //
@@ -638,3 +657,16 @@ authsubsys_authentificate_user(struct clientparam * client) {
 		authsubsys_auth_failed);
 }
 
+extern "C"
+void
+authsubsys_setup_times(
+		unsigned success_expiration_time_sec,
+		unsigned allowed_time_window_sec,
+		unsigned max_failed_attempts,
+		unsigned ban_period_sec) {
+	authsubsys_instance.setup_times(
+			std::chrono::seconds{success_expiration_time_sec},
+			std::chrono::seconds{allowed_time_window_sec},
+			max_failed_attempts,
+			std::chrono::seconds{ban_period_sec});
+}

@@ -51,5 +51,12 @@ authsubsys_auth_result_t
 authsubsys_authentificate_user(
 	struct clientparam * client);
 
+void
+authsubsys_setup_times(
+	unsigned success_expiration_time_sec,
+	unsigned allowed_time_window_sec,
+	unsigned max_failed_attempts,
+	unsigned ban_period_sec);
+
 #endif
 
