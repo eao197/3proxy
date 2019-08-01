@@ -757,77 +757,11 @@ int checkACL(struct clientparam * param){
 	return 3;
 }
 
-struct authcache {
-	char * username;
-	char * password;
-	time_t expires;
-#ifndef NOIPV6
-	struct sockaddr_in6 sa;
-#else
-	struct sockaddr_in sa;
-#endif
-	// NOTE: will be used only if srvport is specified in authcache options.
-	in_port_t srvport;
-
-	// Optional band-limits.
-	unsigned personal_bandlimin_rate;
-	unsigned personal_bandlimout_rate;
-
-	struct authcache *next;
-} *authc = NULL;
-
 int cacheauth(struct clientparam * param){
-	struct authcache *ac, *last=NULL;
-
-	pthread_mutex_lock(&hash_mutex);
-	for(ac = authc; ac; ){
-		if(ac->expires <= conf.time){
-			if(ac->username)myfree(ac->username);
-			if(ac->password)myfree(ac->password);
-			if(!last){
-				authc = ac->next;
-				myfree(ac);
-				ac = authc;
-			}
-			else {
-				last->next = ac->next;
-				myfree(ac);
-				ac = last->next;
-			}
-			continue;
-			
-		}
-		if(((!(conf.authcachetype & AUTHCACHE_USERNAME))
-				|| (param->username && ac->username
-				&& !strcmp(ac->username, (char *)param->username)))
-			&& ((!(conf.authcachetype & AUTHCACHE_IP))
-				|| (*SAFAMILY(&ac->sa) ==  *SAFAMILY(&param->sincr)
-				&& !memcmp(SAADDR(&ac->sa),
-					SAADDR(&param->sincr), SAADDRLEN(&ac->sa))))
-// ***
-			// Check port of proxy service instead of client!
-			&& (!(conf.authcachetype & AUTHCACHE_SRVPORT)
-				|| (*SAFAMILY(&ac->sa) == *SAFAMILY(&param->sincr)
-				&& (ac->srvport == *SAPORT(&param->srv->intsa))))
-// ***
-			&& (!(conf.authcachetype & AUTHCACHE_PASSWORD)
-				|| (ac->password && param->password
-				&& !strcmp(ac->password, (char *)param->password)))) {
-			if(param->username){
-				myfree(param->username);
-			}
-			param->username = (unsigned char *)mystrdup(ac->username);
-			param->personal_bandlimin_rate = ac->personal_bandlimin_rate;
-			param->personal_bandlimout_rate = ac->personal_bandlimout_rate;
-
-			pthread_mutex_unlock(&hash_mutex);
-			return 0;
-		}
-		last = ac;
-		ac = ac->next;
-	}
-
-	pthread_mutex_unlock(&hash_mutex);
+	// This function is not actually needed. But it is still here to
+	// avoid global refactoring of old 3proxy code.
+	
+	// Negative auth result is returned always.
 	return 4;
 }
 
@@ -835,106 +769,13 @@ int doauth(struct clientparam * param){
 	const authsubsys_auth_result_t result = authsubsys_authentificate_user(param);
 	if(authsubsys_auth_successful == result)
 		return alwaysauth(param);
+	else if(authsubsys_auth_denied == result)
+		return 1;
 	else
 		// Value '4' was used in old 3proxy code for cases of failed
 		// authenifications.
 		return 4;
-
-//FIXME: remove after debugging.
-#if 0
-	int res = 0;
-	struct auth *authfuncs;
-	struct authcache *ac;
-	char * tmp;
-	int ret = 0;
-
-	for(authfuncs=param->srv->authfuncs; authfuncs; authfuncs=authfuncs->next){
-		res = authfuncs->authenticate?(*authfuncs->authenticate)(param):0;
-		if(!res) {
-			if(authfuncs->authorize &&
-				(res = (*authfuncs->authorize)(param)))
-					return res;
-
-			if(conf.authcachetype && authfuncs->authenticate && authfuncs->authenticate != cacheauth && param->username && (!(conf.authcachetype & AUTHCACHE_PASSWORD) || (!param->pwtype && param->password))){
-				pthread_mutex_lock(&hash_mutex);
-				for(ac = authc; ac; ac = ac->next){
-					if((!(conf.authcachetype & AUTHCACHE_USERNAME)
-							|| !strcmp(ac->username, (char *)param->username))
-						&& (!(conf.authcachetype & AUTHCACHE_IP)
-						 	|| (*SAFAMILY(&ac->sa) ==  *SAFAMILY(&param->sincr)
-								&& !memcmp(SAADDR(&ac->sa),
-										SAADDR(&param->sincr), SAADDRLEN(&ac->sa))))
-// ***
-						// Check port of proxy service instead of client!
-						&& (!(conf.authcachetype & AUTHCACHE_SRVPORT)
-							|| (*SAFAMILY(&ac->sa) == *SAFAMILY(&param->sincr)
-								&& (ac->srvport == *SAPORT(&param->srv->intsa))))
-// ***
-						&& (!(conf.authcachetype & AUTHCACHE_PASSWORD)
-							|| (ac->password
-								&&!strcmp(ac->password, (char *)param->password)))) {
-						ac->expires = conf.time + conf.authcachetime;
-						if(strcmp(ac->username, (char *)param->username)){
-							tmp = ac->username;
-							ac->username = mystrdup((char *)param->username);
-							myfree(tmp);
-						}
-						if((conf.authcachetype & AUTHCACHE_PASSWORD)){
-							tmp = ac->password;
-							ac->password = mystrdup((char *)param->password);
-							myfree(tmp);
-						}
-						ac->sa = param->sincr;
-						// Store port of service instead if required.
-						if((conf.authcachetype & AUTHCACHE_SRVPORT)) {
-							ac->srvport = *SAPORT(&param->srv->intsa);
-						}
-						ac->personal_bandlimin_rate = param->personal_bandlimin_rate;
-						ac->personal_bandlimout_rate = param->personal_bandlimout_rate;
-						break;
-					}
-				}
-				if(!ac){
-					ac = myalloc(sizeof(struct authcache));
-					if(ac){
-						ac->expires = conf.time + conf.authcachetime;
-						ac->username = param->username?mystrdup((char *)param->username):NULL;
-						ac->sa = param->sincr;
-
-						// Store port of service instead of the client!
-						if((conf.authcachetype & AUTHCACHE_SRVPORT)) {
-							ac->srvport = *SAPORT(&param->srv->intsa);
-						}
-						else
-							ac->srvport = 0;
-
-						ac->password = NULL;
-						if((conf.authcachetype & AUTHCACHE_PASSWORD) && param->password) {
-							ac->password = mystrdup((char *)param->password);
-						}
-
-						ac->personal_bandlimin_rate = param->personal_bandlimin_rate;
-						ac->personal_bandlimout_rate = param->personal_bandlimout_rate;
-					}
-
-//FIXME: this will lead to access violation if myalloc returns NULL.
-					ac->next = authc;
-					authc = ac;
-				}
-				pthread_mutex_unlock(&hash_mutex);
-			}
-			break;
-		}
-		if(res > ret) ret = res;
-	}
-	if(!res){
-		return alwaysauth(param);
-	}
-
-	return ret;
-#endif
 }
-
 
 int ipauth(struct clientparam * param){
 	int res;
