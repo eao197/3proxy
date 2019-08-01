@@ -358,5 +358,12 @@ extern char * ceargv[32];
 
 #define WEBBANNERS 35
 
+// No errors. Successful result.
+#define RES_CODE_SUCCESS 0
+// The user is denied by auth-server.
+#define RES_CODE_AUTH_DENY 1
+// The authentification failed by some other reason.
+#define RES_CODE_AUTH_FAILED 4
+
 #endif
 

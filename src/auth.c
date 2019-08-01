@@ -762,7 +762,7 @@ int cacheauth(struct clientparam * param){
 	// avoid global refactoring of old 3proxy code.
 	
 	// Negative auth result is returned always.
-	return 4;
+	return RES_CODE_AUTH_FAILED;
 }
 
 int doauth(struct clientparam * param){
@@ -770,11 +770,11 @@ int doauth(struct clientparam * param){
 	if(authsubsys_auth_successful == result)
 		return alwaysauth(param);
 	else if(authsubsys_auth_denied == result)
-		return 1;
+		return RES_CODE_AUTH_DENY;
 	else
 		// Value '4' was used in old 3proxy code for cases of failed
 		// authenifications.
-		return 4;
+		return RES_CODE_AUTH_FAILED;
 }
 
 int ipauth(struct clientparam * param){

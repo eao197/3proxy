@@ -336,7 +336,7 @@ static void try_extract_bandlim_rates_from_vsa(
 int radsend(struct clientparam * param, int auth, int stop){
 
 	int id;
-	int res = 4;
+	int res = RES_CODE_AUTH_FAILED;
 	SOCKET sockfd = -1;
 	unsigned char *ptr;
 	int total_length;
@@ -698,9 +698,15 @@ int radsend(struct clientparam * param, int auth, int stop){
 			continue;
 		}
 
-		if(rpacket.code == PW_AUTHENTICATION_REJECT) RETURN (res);
+		if(rpacket.code == PW_AUTHENTICATION_REJECT) {
+			// If 'res' has the value from PW_REPLY_MESSAGE then is shouldn't
+			// be changed. But if 'res' has the default value it should be
+			// set to 'auth-deny' code.
+			if(RES_CODE_AUTH_FAILED == res) res = RES_CODE_AUTH_DENY;
+			RETURN (res);
+		}
 		if(rpacket.code == PW_AUTHENTICATION_ACK) RETURN(0);
-		res = 4;
+		res = RES_CODE_AUTH_FAILED;
 	}
 CLEANRET:
 	if(sockfd >= 0) so._closesocket(sockfd);

@@ -320,6 +320,7 @@ class authsubsys_t {
 	authsubsys_auth_result_t
 	complete_denied_auth(
 		const steady_clock::time_point now,
+		int authfunc_result,
 		clientparam * client,
 		key_t client_key);
 
@@ -394,8 +395,14 @@ authsubsys_t::complete_successful_auth(
 authsubsys_auth_result_t
 authsubsys_t::complete_denied_auth(
 		const steady_clock::time_point now,
+		int authfunc_result,
 		clientparam * client,
 		key_t client_key) {
+	// Actual actions should be performed only if we have RES_CODE_AUTH_DENY.
+	// All other failed attempts should be ignored.
+	if(RES_CODE_AUTH_DENY != authfunc_result)
+		return authsubsys_auth_failed;
+
 	auto it = clients_.find(client_key);
 	if(it == clients_.end()) {
 		// A new info should be created.
@@ -479,7 +486,7 @@ authsubsys_t::authentificate_user(clientparam * client) {
 	}
 
 	// Actual authentication should be performed here.
-	int authfunc_result = 4;
+	int authfunc_result = RES_CODE_AUTH_FAILED;
 	// Iterate over defined authmethods for the service.
 	for(auth * authfuncs=client->srv->authfuncs;
 			authfuncs;
@@ -498,14 +505,11 @@ authsubsys_t::authentificate_user(clientparam * client) {
 	{
 		std::lock_guard<std::mutex> lock{lock_};
 
-		return 0 == authfunc_result ?
+		return RES_CODE_SUCCESS == authfunc_result ?
 				complete_successful_auth(
 						current_time, client, std::move(client_key)) :
-				//FIXME: value of authfunc_result should be analyzed.
-				//User should be banned only if auth-server returns
-				//negative result.
 				complete_denied_auth(
-						current_time, client, std::move(client_key));
+						current_time, authfunc_result, client, std::move(client_key));
 	}
 }
 
