@@ -26,27 +26,27 @@ void * threadfunc (void *p) {
 	fds.revents = 0;
 	for(i=5+(param->srv->maxchild>>10); i; i--){
 		if(so._poll(&fds, 1, 1000*CONNBACK_TO)!=1){
-			param->srv->logfunc(param, (unsigned char *)"Connect back not received, check connback client");
+			param->srv->logfunc(param, LOG_LEVEL_ERROR, (unsigned char *)"Connect back not received, check connback client");
 			i = 0;
 			break;
 		}
 		param->remsock = so._accept(param->srv->cbsock, (struct sockaddr*)&param->sinsr, &size);
 		if(param->remsock == INVALID_SOCKET) {
-			param->srv->logfunc(param, (unsigned char *)"Connect back accept() failed");
+			param->srv->logfunc(param, LOG_LEVEL_ERROR, (unsigned char *)"Connect back accept() failed");
 			continue;
 		}
 #ifndef WITHMAIN
 		param->req = param->sinsr;
 		if(param->srv->acl) param->res = checkACL(param);
 		if(param->res){
-			param->srv->logfunc(param, (unsigned char *)"Connect back ACL failed");
+			param->srv->logfunc(param, LOG_LEVEL_ERROR, (unsigned char *)"Connect back ACL failed");
 			so._closesocket(param->remsock);
 			param->remsock = INVALID_SOCKET;
 			continue;
 		}
 #endif
 		if(socksendto(param->remsock, (struct sockaddr*)&param->sinsr, (unsigned char *)"C", 1, CONNBACK_TO) != 1){
-			param->srv->logfunc(param, (unsigned char *)"Connect back sending command failed");
+			param->srv->logfunc(param, LOG_LEVEL_ERROR, (unsigned char *)"Connect back sending command failed");
 			so._closesocket(param->remsock);
 			param->remsock = INVALID_SOCKET;
 			continue;
@@ -587,7 +587,7 @@ int MODULEMAINFUNC (int argc, char** argv){
 	size = sizeof(srv.intsa);
 	for(sleeptime = SLEEPTIME * 100; so._bind(sock, (struct sockaddr*)&srv.intsa, SASIZE(&srv.intsa))==-1; usleep(sleeptime)) {
 		sprintf((char *)buf, "bind(): %s", strerror(errno));
-		if(!srv.silent)(*srv.logfunc)(&defparam, buf);	
+		if(!srv.silent)(*srv.logfunc)(&defparam, LOG_LEVEL_ALERT, buf);	
 		sleeptime = (sleeptime<<1);	
 		if(!sleeptime) {
 			so._closesocket(sock);
@@ -598,7 +598,7 @@ int MODULEMAINFUNC (int argc, char** argv){
  	if(!isudp){
  		if(so._listen (sock, 1 + (srv.maxchild>>4))==-1) {
 			sprintf((char *)buf, "listen(): %s", strerror(errno));
-			if(!srv.silent)(*srv.logfunc)(&defparam, buf);
+			if(!srv.silent)(*srv.logfunc)(&defparam, LOG_LEVEL_ALERT, buf);
 			return -4;
 		}
 	}
@@ -607,13 +607,13 @@ int MODULEMAINFUNC (int argc, char** argv){
 
 	if(!srv.silent && !iscbc){
 		sprintf((char *)buf, "Accepting connections [%u/%u]", (unsigned)getpid(), (unsigned)pthread_self());
-		(*srv.logfunc)(&defparam, buf);
+		(*srv.logfunc)(&defparam, LOG_LEVEL_NOTICE, buf);
 	}
  }
  if(iscbl){
 	parsehost(srv.family, cbl_string, (struct sockaddr *)&cbsa);
 	if((srv.cbsock=so._socket(SASOCK(&cbsa), SOCK_STREAM, IPPROTO_TCP))==INVALID_SOCKET) {
-		(*srv.logfunc)(&defparam, (unsigned char *)"Failed to allocate connect back socket");
+		(*srv.logfunc)(&defparam, LOG_LEVEL_ERROR, (unsigned char *)"Failed to allocate connect back socket");
 		return -6;
 	}
 	opt = 1;
@@ -626,11 +626,11 @@ int MODULEMAINFUNC (int argc, char** argv){
 	setopts(srv.cbsock, srv.cbssockopts);
 
 	if(so._bind(srv.cbsock, (struct sockaddr*)&cbsa, SASIZE(&cbsa))==-1) {
-		(*srv.logfunc)(&defparam, (unsigned char *)"Failed to bind connect back socket");
+		(*srv.logfunc)(&defparam, LOG_LEVEL_ERROR, (unsigned char *)"Failed to bind connect back socket");
 		return -7;
 	}
 	if(so._listen(srv.cbsock, 1 + (srv.maxchild>>4))==-1) {
-		(*srv.logfunc)(&defparam, (unsigned char *)"Failed to listen connect back socket");
+		(*srv.logfunc)(&defparam, LOG_LEVEL_ERROR, (unsigned char *)"Failed to listen connect back socket");
 		return -8;
 	}
  }
@@ -650,7 +650,7 @@ int MODULEMAINFUNC (int argc, char** argv){
 			nlog++;			
 			if(!srv.silent && nlog > 5000) {
 				sprintf((char *)buf, "Warning: too many connected clients (%d/%d)", srv.childcount, srv.maxchild);
-				(*srv.logfunc)(&defparam, buf);
+				(*srv.logfunc)(&defparam, LOG_LEVEL_WARN, buf);
 				nlog = 0;
 			}
 			usleep(SLEEPTIME);
@@ -668,7 +668,7 @@ int MODULEMAINFUNC (int argc, char** argv){
 		if (error == 0) continue;
 		if (errno != EAGAIN &&	errno != EINTR) {
 			sprintf((char *)buf, "poll(): %s/%d", strerror(errno), errno);
-			if(!srv.silent)(*srv.logfunc)(&defparam, buf);
+			if(!srv.silent)(*srv.logfunc)(&defparam, LOG_LEVEL_ERROR, buf);
 			break;
 		}
 	}
@@ -741,7 +741,7 @@ int MODULEMAINFUNC (int argc, char** argv){
 				nlog++;			
 				if(!srv.silent && (error || nlog > 5000)) {
 					sprintf((char *)buf, "accept(): %s", strerror(errno));
-					(*srv.logfunc)(&defparam, buf);
+					(*srv.logfunc)(&defparam, LOG_LEVEL_ERROR, buf);
 					nlog = 0;
 				}
 				continue;
@@ -751,7 +751,7 @@ int MODULEMAINFUNC (int argc, char** argv){
 		size = sizeof(defparam.sincl);
 		if(so._getsockname(new_sock, (struct sockaddr *)&defparam.sincl, &size)){
 			sprintf((char *)buf, "getsockname(): %s", strerror(errno));
-			if(!srv.silent)(*srv.logfunc)(&defparam, buf);
+			if(!srv.silent)(*srv.logfunc)(&defparam, LOG_LEVEL_ALERT, buf);
 			continue;
 		}
 #ifdef _WIN32
@@ -768,7 +768,8 @@ int MODULEMAINFUNC (int argc, char** argv){
 	if(! (newparam = myalloc (sizeof(defparam)))){
 		if(!isudp) so._closesocket(new_sock);
 		defparam.res = 21;
-		if(!srv.silent)(*srv.logfunc)(&defparam, (unsigned char *)"Memory Allocation Failed");
+		if(!srv.silent)(*srv.logfunc)(&defparam,
+				LOG_LEVEL_ALERT, (unsigned char *)"Memory Allocation Failed");
 		usleep(SLEEPTIME);
 		continue;
 	};
@@ -805,7 +806,7 @@ int MODULEMAINFUNC (int argc, char** argv){
 	}
 	else {
 		sprintf((char *)buf, "_beginthreadex(): %s", _strerror(NULL));
-		if(!srv.silent)(*srv.logfunc)(&defparam, buf);
+		if(!srv.silent)(*srv.logfunc)(&defparam, LOG_LEVEL_ALERT, buf);
 		error = 1;
 	}
 #else
@@ -814,7 +815,7 @@ int MODULEMAINFUNC (int argc, char** argv){
 	srv.childcount++;
 	if(error){
 		sprintf((char *)buf, "pthread_create(): %s", strerror(error));
-		if(!srv.silent)(*srv.logfunc)(&defparam, buf);
+		if(!srv.silent)(*srv.logfunc)(&defparam, LOG_LEVEL_ALERT, buf);
 	}
 	else {
 		newparam->threadid = (unsigned)thread;
@@ -828,7 +829,7 @@ int MODULEMAINFUNC (int argc, char** argv){
 	if(isudp) while(!srv.fds.events)usleep(SLEEPTIME);
  }
 
- if(!srv.silent) srv.logfunc(&defparam, (unsigned char *)"Exiting thread");
+ if(!srv.silent) srv.logfunc(&defparam, LOG_LEVEL_NOTICE, (unsigned char *)"Exiting thread");
 
  srvfree(&srv);
 
