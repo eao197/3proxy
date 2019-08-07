@@ -718,12 +718,15 @@ int radauth(struct clientparam * param){
 	return radsend(param, 1, 0);
 }
 
-void logradius(struct clientparam * param, const unsigned char *s) {
-	radsend(param, 0, 1);
-	if(param->trafcountfunc)(*param->trafcountfunc)(param);
-	clearstat(param);
+void logradius(
+		struct clientparam * param,
+		LOG_LEVEL msg_level,
+		const unsigned char *s) {
+	if(conf.log_level <= msg_level) {
+		radsend(param, 0, 1);
+		if(param->trafcountfunc)(*param->trafcountfunc)(param);
+		clearstat(param);
+	}
 }
-
-
 
 #endif

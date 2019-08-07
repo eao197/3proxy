@@ -181,13 +181,25 @@ typedef enum {
 	S_ZOMBIE
 }PROXYSERVICE;
 
+// Since 0.9-devel-bi.2.2.0
+typedef enum {
+	LOG_LEVEL_DEBUG=0,
+	LOG_LEVEL_INFO,
+	LOG_LEVEL_NOTICE,
+	LOG_LEVEL_WARN,
+	LOG_LEVEL_ERROR,
+	LOG_LEVEL_CRIT,
+	LOG_LEVEL_ALERT,
+	LOG_LEVEL_EMERG
+} LOG_LEVEL;
+
 struct clientparam;
 struct node;
 struct symbol;
 struct pluginlink;
 struct srvparam;
 
-typedef void (*LOGFUNC)(struct clientparam * param, const unsigned char *);
+typedef void (*LOGFUNC)(struct clientparam * param, LOG_LEVEL msg_level, const unsigned char *);
 typedef int (*AUTHFUNC)(struct clientparam * param);
 typedef void * (*REDIRECTFUNC)(struct clientparam * param);
 typedef unsigned long (*RESOLVFUNC)(int af, unsigned char *name, unsigned char *value);
@@ -635,6 +647,9 @@ struct extparam {
 	// Band-limit for outgoing traffic of a client.
 	// Value 0 means that this limit is not used.
 	unsigned client_bandlimout_rate;
+
+	// Log level for application.
+	LOG_LEVEL log_level;
 };
 
 struct property {

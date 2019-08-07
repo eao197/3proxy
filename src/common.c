@@ -130,6 +130,9 @@ struct extparam conf = {
 	(time_t)0, (time_t)0,
 	0,0,
 	'@',
+	0u, // client_bandlimin_rate
+	0u, // client_bandlimout_rate
+	LOG_LEVEL_WARN // log_level
 };
 
 int numservers=0;
@@ -657,28 +660,42 @@ int dobuf(struct clientparam * param, unsigned char * buf, const unsigned char *
 	return i;
 }
 
-void lognone(struct clientparam * param, const unsigned char *s) {
-	if(param->trafcountfunc)(*param->trafcountfunc)(param);
-	clearstat(param);
+void lognone(
+		struct clientparam * param,
+		LOG_LEVEL msg_level,
+		const unsigned char *s) {
+	if(conf.log_level <= msg_level) {
+		if(param->trafcountfunc)(*param->trafcountfunc)(param);
+		clearstat(param);
+	}
 }
 
-void logstdout(struct clientparam * param, const unsigned char *s) {
-	FILE *log;
-	unsigned char tmpbuf[8192];
+void logstdout(
+		struct clientparam * param,
+		LOG_LEVEL msg_level,
+		const unsigned char *s) {
+	if(conf.log_level <= msg_level) {
+		FILE *log;
+		unsigned char tmpbuf[8192];
 
-	dobuf(param, tmpbuf, s, NULL);
-	log = param->srv->stdlog?param->srv->stdlog:conf.stdlog?conf.stdlog:stdout;
-	if(!param->nolog)if(fprintf(log, "%s\n", tmpbuf) < 0) {
-		perror("printf()");
-	};
-	if(log != conf.stdlog)fflush(log);
+		dobuf(param, tmpbuf, s, NULL);
+		log = param->srv->stdlog?param->srv->stdlog:conf.stdlog?conf.stdlog:stdout;
+		if(!param->nolog)if(fprintf(log, "%s\n", tmpbuf) < 0) {
+			perror("printf()");
+		};
+		if(log != conf.stdlog)fflush(log);
+	}
 }
 #ifndef _WIN32
-void logsyslog(struct clientparam * param, const unsigned char *s) {
-
-	unsigned char tmpbuf[8192];
-	dobuf(param, tmpbuf, s, NULL);
-	if(!param->nolog)syslog(LOG_INFO, "%s", tmpbuf);
+void logsyslog(
+		struct clientparam * param,
+		LOG_LEVEL msg_level,
+		const unsigned char *s) {
+	if(conf.log_level <= msg_level) {
+		unsigned char tmpbuf[8192];
+		dobuf(param, tmpbuf, s, NULL);
+		if(!param->nolog)syslog(LOG_INFO, "%s", tmpbuf);
+	}
 }
 #endif
 

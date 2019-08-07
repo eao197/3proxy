@@ -1488,6 +1488,32 @@ static int h_client_bandlimout(int argc, unsigned char **argv){
 	return 0;
 }
 
+static int h_log_level(int argc, unsigned char **argv){
+	const char * level_name = (char *)argv[1];
+	if(0 == strcmp(level_name, "debug"))
+		conf.log_level = LOG_LEVEL_DEBUG;
+	else if(0 == strcmp(level_name, "info"))
+		conf.log_level = LOG_LEVEL_INFO;
+	else if(0 == strcmp(level_name, "notice"))
+		conf.log_level = LOG_LEVEL_NOTICE;
+	else if(0 == strcmp(level_name, "warn"))
+		conf.log_level = LOG_LEVEL_WARN;
+	else if(0 == strcmp(level_name, "error"))
+		conf.log_level = LOG_LEVEL_ERROR;
+	else if(0 == strcmp(level_name, "crit"))
+		conf.log_level = LOG_LEVEL_CRIT;
+	else if(0 == strcmp(level_name, "alert"))
+		conf.log_level = LOG_LEVEL_ALERT;
+	else if(0 == strcmp(level_name, "emerg"))
+		conf.log_level = LOG_LEVEL_EMERG;
+	else {
+		fprintf(stderr, "invalid name of log_level: %s\n", log_level);
+		return 2;
+	}
+
+	return 0;
+}
+
 static int h_auth_times(int argc, unsigned char **argv){
 	unsigned success_expiration_time;
 	if(1 != sscanf(argv[1], "%u", &success_expiration_time)) {
@@ -1598,8 +1624,9 @@ struct commands commandhandlers[]={
 	{commandhandlers+61, "client_bandlimin", h_client_bandlimin, 2, 2},
 	{commandhandlers+62, "client_bandlimout", h_client_bandlimout, 2, 2},
 	{commandhandlers+63, "auth_times", h_auth_times, 4, 4},
+	{commandhandlers+64, "log_level", h_log_level, 2, 2},
 #ifndef NORADIUS
-	{commandhandlers+64, "radius", h_radius, 3, 0},
+	{commandhandlers+65, "radius", h_radius, 3, 0},
 #endif
 	{specificcommands, 	 "", h_noop, 1, 0}
 };
@@ -1826,6 +1853,8 @@ void freeconf(struct extparam *confp){
  confp->rotate = 0;
  confp->logtype = NONE;
  confp->logtime = confp->time = 0;
+
+ confp->log_level = LOG_LEVEL_WARN;
 
  archiverc = confp->archiverc;
  confp->archiverc = 0;
