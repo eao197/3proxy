@@ -99,7 +99,7 @@ void * udppmchild(struct clientparam* param) {
 CLEANRET:
 
  if(buf)myfree(buf);
- (*param->srv->logfunc)(param, NULL);
+ (*param->srv->logfunc)(param, LOG_LEVEL_DEBUG, NULL);
 #ifndef _WIN32
  param->clisock = INVALID_SOCKET;
 #endif

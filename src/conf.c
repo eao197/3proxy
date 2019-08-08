@@ -1507,7 +1507,7 @@ static int h_log_level(int argc, unsigned char **argv){
 	else if(0 == strcmp(level_name, "emerg"))
 		conf.log_level = LOG_LEVEL_EMERG;
 	else {
-		fprintf(stderr, "invalid name of log_level: %s\n", log_level);
+		fprintf(stderr, "invalid name of log_level: %s\n", level_name);
 		return 2;
 	}
 

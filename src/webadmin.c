@@ -576,7 +576,7 @@ CLEANRET:
 
  printstr(&pp, NULL);
  if(buf) myfree(buf);
- (*param->srv->logfunc)(param, (unsigned char *)req);
+ (*param->srv->logfunc)(param, LOG_LEVEL_DEBUG, (unsigned char *)req);
  if(req)myfree(req);
  freeparam(param);
  return (NULL);

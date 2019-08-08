@@ -660,7 +660,9 @@ static int try_set_client_bandlimin_if_needed(struct clientparam * param) {
 		if(!param->client_limits) {
 			if(!param->srv->silent)
 				(*param->srv->logfunc)(
-						param,"alwaysauth: client_limits_make failed\n");
+						param,
+						LOG_LEVEL_ERROR,
+						"alwaysauth: client_limits_make failed\n");
 			// It's hard to detect that error code could be returned
 			// in such case. But it seems that alwaysauth returns just
 			// one error code and that code is 95.

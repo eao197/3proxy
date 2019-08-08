@@ -152,7 +152,8 @@ static void logurl(struct clientparam * param, char * buf, char * req, int ftp){
 		strcpy(se, sb);
 	}
  }
- if(param->res != 555 && param->res != 508)(*param->srv->logfunc)(param, (unsigned char *)(req?buf:NULL));
+ if(param->res != 555 && param->res != 508)
+  (*param->srv->logfunc)(param, LOG_LEVEL_INFO, (unsigned char *)(req?buf:NULL));
 }
 
 void decodeurl(unsigned char *s, int allowcr){

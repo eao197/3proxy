@@ -295,7 +295,7 @@ void * ftpprchild(struct clientparam* param) {
 	sasize = sizeof(param->sincr);
 	if(so._getpeername(param->ctrlsock, (struct sockaddr *)&param->sincr, &sasize)){RETURN(819);}
 	if(req && (param->statscli64 || param->statssrv64)){
-		(*param->srv->logfunc)(param, (unsigned char *)req);
+		(*param->srv->logfunc)(param, LOG_LEVEL_DEBUG, (unsigned char *)req);
 	}
  }
 
@@ -316,7 +316,7 @@ CLEANRET:
  sasize = sizeof(param->sincr);
  so._getpeername(param->ctrlsock, (struct sockaddr *)&param->sincr, &sasize);
  if(param->res != 0 || param->statscli64 || param->statssrv64 ){
-	(*param->srv->logfunc)(param, (unsigned char *)((req && (param->res > 802))? req:NULL));
+	(*param->srv->logfunc)(param, LOG_LEVEL_DEBUG, (unsigned char *)((req && (param->res > 802))? req:NULL));
  }
  if(req) myfree(req);
  if(buf) myfree(buf);
