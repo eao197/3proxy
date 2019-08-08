@@ -613,6 +613,9 @@ int radsend(struct clientparam * param, int auth, int stop){
 		fds[0].fd = remsock;
 		fds[0].events = POLLIN;
 		if(so._poll(fds, 1, conf.timeouts[SINGLEBYTE_L]*1000) <= 0) {
+			char buf[128];
+			sprintf(buf, "no response from Radius server #%d", radserver_index);
+			(*param->srv->logfunc)(param, LOG_LEVEL_ERROR, buf);
 			continue;
 		}
 
