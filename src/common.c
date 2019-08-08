@@ -393,8 +393,24 @@ char months[12][4] = {
 	"Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
 };
 
+const char * log_level_names[] = {
+	"DEBUG ",
+	"INFO  ",
+	"NOTICE",
+	"WARN  ",
+	"ERROR ",
+	"CRIT  ",
+	"ALERT ",
+	"EMER  "
+};
 
-int dobuf2(struct clientparam * param, unsigned char * buf, const unsigned char *s, const unsigned char * doublec, struct tm* tm, char * format){
+int dobuf2(
+		struct clientparam * param,
+		LOG_LEVEL log_level,
+		unsigned char * buf,
+		const unsigned char *s,
+		const unsigned char * doublec,
+		struct tm* tm, char * format){
 	int i, j;
 	int len;
 	time_t sec;
@@ -633,6 +649,12 @@ int dobuf2(struct clientparam * param, unsigned char * buf, const unsigned char 
 						break;
 
 					}
+				case '@': {
+					const char * level_name = log_level_names[log_level];
+					strcpy(&buf[i], level_name);
+					i += strlen(level_name);
+					break;
+					}
 				default:
 				 buf[i++] = format[j];
 			}
@@ -643,7 +665,12 @@ int dobuf2(struct clientparam * param, unsigned char * buf, const unsigned char 
 	return i;
 }
 
-int dobuf(struct clientparam * param, unsigned char * buf, const unsigned char *s, const unsigned char * doublec){
+int dobuf(
+		struct clientparam * param,
+		LOG_LEVEL log_level,
+		unsigned char * buf,
+		const unsigned char *s,
+		const unsigned char * doublec) {
 	struct tm* tm;
 	int i;
 	char * format;
@@ -655,7 +682,7 @@ int dobuf(struct clientparam * param, unsigned char * buf, const unsigned char *
 	format = param->srv->logformat?(char *)param->srv->logformat : DEFLOGFORMAT;
 	tm = (*format == 'G' || *format == 'g')?
 		gmtime(&t) : localtime(&t);
-	i = dobuf2(param, buf, s, doublec, tm, format + 1);
+	i = dobuf2(param, log_level, buf, s, doublec, tm, format + 1);
 	clearstat(param);
 	return i;
 }
@@ -678,7 +705,7 @@ void logstdout(
 		FILE *log;
 		unsigned char tmpbuf[8192];
 
-		dobuf(param, tmpbuf, s, NULL);
+		dobuf(param, msg_level, tmpbuf, s, NULL);
 		log = param->srv->stdlog?param->srv->stdlog:conf.stdlog?conf.stdlog:stdout;
 		if(!param->nolog)if(fprintf(log, "%s\n", tmpbuf) < 0) {
 			perror("printf()");
@@ -693,7 +720,7 @@ void logsyslog(
 		const unsigned char *s) {
 	if(conf.log_level <= msg_level) {
 		unsigned char tmpbuf[8192];
-		dobuf(param, tmpbuf, s, NULL);
+		dobuf(param, msg_level, tmpbuf, s, NULL);
 		if(!param->nolog)syslog(LOG_INFO, "%s", tmpbuf);
 	}
 }

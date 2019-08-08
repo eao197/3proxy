@@ -163,8 +163,8 @@ int sockgetlinebuf(struct clientparam * param, DIRECTION which, unsigned char * 
 
 
 
-int dobuf(struct clientparam * param, unsigned char * buf, const unsigned char *s, const unsigned char * doublec);
-int dobuf2(struct clientparam * param, unsigned char * buf, const unsigned char *s, const unsigned char * doublec, struct tm* tm, char * format);
+int dobuf(struct clientparam * param, LOG_LEVEL log_level, unsigned char * buf, const unsigned char *s, const unsigned char * doublec);
+int dobuf2(struct clientparam * param, LOG_LEVEL log_level, unsigned char * buf, const unsigned char *s, const unsigned char * doublec, struct tm* tm, char * format);
 extern FILE * stdlog;
 void logstdout(struct clientparam * param, LOG_LEVEL msg_level, const unsigned char *s);
 void logsyslog(struct clientparam * param, LOG_LEVEL msg_level, const unsigned char *s);
